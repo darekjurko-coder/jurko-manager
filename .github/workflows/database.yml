@@ -24,9 +24,11 @@ jobs:
           tools: composer:v2
       - name: Składnia i spójność schematu
         run: |
-          find server auth app tests -name '*.php' -print0 | xargs -0 -n1 php -l
+          find server auth app tests scripts -name '*.php' -print0 | xargs -0 -n1 php -l
           python3 scripts/build-schema.py --check
           php tests/auth-policy.php
+          sh -n scripts/deploy-ovh.sh
+          if php scripts/prepare-auth.php; then exit 1; fi
       - name: Biblioteka Google
         run: |
           composer validate --no-check-publish
