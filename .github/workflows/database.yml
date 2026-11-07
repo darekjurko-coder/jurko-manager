@@ -17,10 +17,22 @@ jobs:
           --health-interval=10s --health-timeout=5s --health-retries=12
     steps:
       - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_mysql, curl, openssl
+          tools: composer:v2
       - name: Składnia i spójność schematu
         run: |
-          find server tests -name '*.php' -print0 | xargs -0 -n1 php -l
+          find server auth app tests -name '*.php' -print0 | xargs -0 -n1 php -l
           python3 scripts/build-schema.py --check
+          php tests/auth-policy.php
+      - name: Biblioteka Google
+        run: |
+          composer validate --no-check-publish
+          composer install --no-interaction --prefer-dist
+          composer audit
+          php -r 'require "vendor/autoload.php"; $c = new Google\Client(); $c->setScopes(["openid","email"]); echo "Biblioteka Google OK\n";'
       - name: Prywatna konfiguracja testowa
         run: |
           mkdir -p ../jurko-private
