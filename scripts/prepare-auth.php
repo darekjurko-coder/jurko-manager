@@ -1,7 +1,14 @@
 <?php
 declare(strict_types=1);
 try {
-    $config = json_decode(getenv('AUTH_JSON') ?: '', true, 512, JSON_THROW_ON_ERROR);
+    $config = [
+        'client_id' => trim(getenv('GOOGLE_CLIENT_ID') ?: ''),
+        'client_secret' => trim(getenv('GOOGLE_CLIENT_SECRET') ?: ''),
+        'redirect_uri' => 'https://koszty.jurkoseo.pl/auth/index.php?action=callback',
+        'accounts' => json_decode(getenv('ACCOUNTS_JSON') ?: '', true, 512, JSON_THROW_ON_ERROR),
+    ];
+    if (!preg_match('/^[0-9]+-[a-zA-Z0-9_-]+\.apps\.googleusercontent\.com$/D', $config['client_id'])
+        || !str_starts_with($config['client_secret'], 'GOCSPX-')) { throw new RuntimeException(); }
     foreach (['client_id','client_secret','redirect_uri'] as $key) {
         if (!is_string($config[$key] ?? null) || $config[$key] === '') { throw new RuntimeException(); }
     }

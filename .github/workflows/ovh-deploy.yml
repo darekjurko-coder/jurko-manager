@@ -22,7 +22,7 @@ jobs:
         run: |
           composer install --no-dev --no-interaction --prefer-dist
           composer audit
-          find server auth app tests -name '*.php' -print0 | xargs -0 -n1 php -l
+          find server auth app tests scripts -name '*.php' -print0 | xargs -0 -n1 php -l
           php tests/auth-policy.php
           python3 scripts/build-schema.py --check
           tar -czf /tmp/jurko-release.tar.gz index.html pracownik.html staff.js server auth app vendor composer.json composer.lock
@@ -30,9 +30,11 @@ jobs:
         env:
           SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
           KNOWN_HOSTS: ${{ secrets.OVH_KNOWN_HOSTS }}
-          AUTH_JSON: ${{ secrets.JURKO_AUTH_JSON }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          ACCOUNTS_JSON: ${{ secrets.JURKO_ACCOUNTS_JSON }}
         run: |
-          test -n "$SSHPASS" && test -n "$KNOWN_HOSTS" && test -n "$AUTH_JSON"
+          test -n "$SSHPASS" && test -n "$KNOWN_HOSTS"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts

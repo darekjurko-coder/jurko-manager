@@ -10,9 +10,12 @@ Nie został jeszcze uruchomiony ani sprawdzony na rzeczywistym OVH.
 - OVH_KNOWN_HOSTS: pełna, niezależnie zweryfikowana linia known_hosts dla
   ssh.cluster131.hosting.ovh.net. Nie stosuj ślepego ssh-keyscan ani wyłączania
   kontroli hosta. Potwierdzenie klucza jest wymagane przed pierwszym połączeniem.
-- JURKO_AUTH_JSON: JSON z polami client_id, client_secret, redirect_uri oraz
-  accounts. Format odpowiada server/auth-config.example.php. Accounts mapuje
-  zatwierdzone identyfikatory sub na role. Nie wpisuj sekretów do repozytorium.
+- GOOGLE_CLIENT_ID: identyfikator klienta JURKO MANAGER.
+- GOOGLE_CLIENT_SECRET: tajny klucz tego samego klienta.
+- JURKO_ACCOUNTS_JSON: mapa zatwierdzonych identyfikatorów Google sub na role,
+  zgodna z polem accounts w server/auth-config.example.php. Pusta mapa blokuje
+  wdrożenie. Nie wpisuj sekretów do repozytorium.
+Adres przekierowania jest ustawiony na stałe w skrypcie przygotowania konfiguracji.
 
 Wymagane jest odrębne zatwierdzenie udostępnienia poświadczeń GitHub Actions
 oraz pierwszego wdrożenia. Ogranicz środowisko do main i ustaw zatwierdzanie
