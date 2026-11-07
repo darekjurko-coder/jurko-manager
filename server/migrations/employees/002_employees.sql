@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS jm_employees (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ display_name VARCHAR(120) NOT NULL,
+ department ENUM('sales','warehouse','drivers','administration') NOT NULL,
+ active BOOLEAN NOT NULL DEFAULT TRUE,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

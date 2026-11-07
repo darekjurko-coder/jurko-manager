@@ -1,0 +1,38 @@
+name: Kontrola bazy MySQL
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: synthetic-ci-password
+          MYSQL_DATABASE: jurko_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -psynthetic-ci-password"
+          --health-interval=10s --health-timeout=5s --health-retries=12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Składnia i spójność schematu
+        run: |
+          find server tests -name '*.php' -print0 | xargs -0 -n1 php -l
+          python3 scripts/build-schema.py --check
+      - name: Prywatna konfiguracja testowa
+        run: |
+          mkdir -p ../jurko-private
+          php -r 'file_put_contents("../jurko-private/config.php", "<?php return ".var_export(["host"=>"127.0.0.1","database"=>"jurko_test","username"=>"root","password"=>"synthetic-ci-password"],true).";");'
+          chmod 700 ../jurko-private
+          chmod 600 ../jurko-private/config.php
+      - name: Nowa baza, ponowienie i integralność
+        run: |
+          php server/migrate.php
+          php server/migrate.php
+          php tests/database.php
+      - name: Zmiana starej migracji musi być odrzucona
+        run: |
+          echo '-- zmieniona historia' >> server/migrations/core/001_migrations.sql
+          if php server/migrate.php; then exit 1; fi

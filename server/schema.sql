@@ -1,9 +1,13 @@
--- JURKO MANAGER: pusty schemat, bez haseł, kont i rzeczywistych danych.
--- Tabele mają prefiks jm_; brak DROP, DELETE i nadpisywania istniejących danych.
+-- Wygenerowano z server/migrations; nie edytuj ręcznie.
+-- Pusty schemat, bez kont i danych firmowych.
+
+-- Moduł: core/001_migrations.sql
 CREATE TABLE IF NOT EXISTS jm_migrations (
  version VARCHAR(64) PRIMARY KEY,
  applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: employees/002_employees.sql
 CREATE TABLE IF NOT EXISTS jm_employees (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  display_name VARCHAR(120) NOT NULL,
@@ -11,6 +15,8 @@ CREATE TABLE IF NOT EXISTS jm_employees (
  active BOOLEAN NOT NULL DEFAULT TRUE,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: auth/003_accounts.sql
 CREATE TABLE IF NOT EXISTS jm_accounts (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  employee_id BIGINT UNSIGNED NULL UNIQUE,
@@ -22,6 +28,8 @@ CREATE TABLE IF NOT EXISTS jm_accounts (
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  FOREIGN KEY (employee_id) REFERENCES jm_employees(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: employees/004_results.sql
 CREATE TABLE IF NOT EXISTS jm_monthly_results (
  employee_id BIGINT UNSIGNED NOT NULL,
  year SMALLINT UNSIGNED NOT NULL,
@@ -37,6 +45,8 @@ CREATE TABLE IF NOT EXISTS jm_monthly_results (
  CHECK (target IS NULL OR target >= 0),
  CHECK (actual IS NULL OR actual >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: employees/005_bonuses.sql
 CREATE TABLE IF NOT EXISTS jm_bonus_settings (
  employee_id BIGINT UNSIGNED NOT NULL,
  year SMALLINT UNSIGNED NOT NULL,
@@ -53,6 +63,8 @@ CREATE TABLE IF NOT EXISTS jm_bonus_settings (
  CHECK (team_bonus IS NULL OR team_bonus >= 0),
  CHECK (threshold_percent > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: finance/006_entries.sql
 CREATE TABLE IF NOT EXISTS jm_financial_entries (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  company ENUM('zoo','spk') NOT NULL,
@@ -67,6 +79,8 @@ CREATE TABLE IF NOT EXISTS jm_financial_entries (
  FOREIGN KEY (created_by) REFERENCES jm_accounts(id),
  CHECK (amount_net > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: tasks/007_tasks.sql
 CREATE TABLE IF NOT EXISTS jm_tasks (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  company ENUM('zoo','spk') NOT NULL,
@@ -80,6 +94,8 @@ CREATE TABLE IF NOT EXISTS jm_tasks (
  FOREIGN KEY (assignee_id) REFERENCES jm_employees(id),
  FOREIGN KEY (created_by) REFERENCES jm_accounts(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: audit/008_log.sql
 CREATE TABLE IF NOT EXISTS jm_audit_log (
  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
  actor_id BIGINT UNSIGNED NULL,
