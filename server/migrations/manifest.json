@@ -1,0 +1,10 @@
+[
+  "core/001_migrations.sql",
+  "employees/002_employees.sql",
+  "auth/003_accounts.sql",
+  "employees/004_results.sql",
+  "employees/005_bonuses.sql",
+  "finance/006_entries.sql",
+  "tasks/007_tasks.sql",
+  "audit/008_log.sql"
+]

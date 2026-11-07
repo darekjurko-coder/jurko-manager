@@ -32,8 +32,12 @@ Po uzyskaniu dostępu SSH i skonfigurowaniu prywatnego pliku:
 php ~/www/server/migrate.php
 ```
 
-Nie udostępniaj internetowego instalatora przyjmującego hasło bazy. Skrypt migracji
-jest powtarzalny dla pustego schematu v1, ale nie zastępuje przyszłych migracji zmian.
+Nie udostępniaj internetowego instalatora przyjmującego hasło bazy. Skrypt czyta uporządkowany manifest modułów. Rejestruje sumy SHA-256 wykonanych
+plików w jm_migration_files, odrzuca zmienioną historię i blokuje równoległe migracje.
+Istniejąca tabela jm_migrations z wersji v1 pozostaje zgodna.
+CREATE TABLE IF NOT EXISTS nie sprawdza struktury zastanych tabel; przed migracją
+istniejącej bazy porównaj SHOW CREATE TABLE z oczekiwanym schematem.
+Nowe zmiany dodawaj jako kolejne pliki; nie edytuj wykonanych migracji.
 MySQL wykonuje DDL poza transakcją; niepowodzenie może pozostawić część tabel.
 Nie twórz kont pracowników, dopóki nie jest gotowy i przetestowany system kont.
 
@@ -44,8 +48,17 @@ zmiany. Automatyczny webhook nie został jeszcze skonfigurowany.
 Nie zmieniaj DNS `koszty.jurkoseo.pl` przed testem HTTPS i połączenia z bazą.
 Pozostałe domeny i poczta pozostają niezależne od tego wdrożenia.
 
+## Import przez phpMyAdmin
+
+`schema.sql` jest generowany z plików modułów przez `python3 scripts/build-schema.py`.
+Można go importować do pustej bazy, bez SSH. Import tworzy wyłącznie tabele,
+nie łączy aplikacji z bazą i nie zapisuje historii jm_migration_files.
+Późniejsze uruchomienie migrate.php na takim samym schemacie uzupełnia historię.
+Po zmianie hasła MySQL zaktualizuj również prywatny config.php na OVH.
+
 ## Walidacja
 
-W środowisku roboczym brak interpretera PHP/MySQL. Przed uruchomieniem migracji
-wymagane są `php -l` dla plików PHP oraz test migracji na pustej bazie MySQL 8.4.
-Nie uznawaj tych plików za przetestowany produkcyjny backend.
+Workflow `.github/workflows/database.yml` sprawdza składnię PHP, spójność eksportu,
+migrację na MySQL 8.4, ponowne uruchomienie, klucze obce, ograniczenia wartości,
+nieaktywne konta oraz odrzucenie zmienionej historii. Dane testowe są syntetyczne.
+Testy nie potwierdzają połączenia z produkcyjnym OVH.
