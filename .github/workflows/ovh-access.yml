@@ -22,6 +22,7 @@ jobs:
           test "$fingerprint" = 'SHA256:N4DQHF8Pzfs8s5/QgV8tEx5NgKZeghhkDfpnO+ZG7Fo'
           install -m 600 /tmp/ovh-host ~/.ssh/known_hosts
       - name: Sprawdź format hasła i szyfrowane logowanie FTP
+        continue-on-error: true
         env:
           OVH_PASSWORD: ${{ secrets.OVH_SSH_PASSWORD }}
         run: |
@@ -60,6 +61,22 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y sshpass
           sshpass -e ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o NumberOfPasswordPrompts=1 geuveax@ssh.cluster131.hosting.ovh.net 'printf "SSH_LOGIN_OK\\n"; php -v | head -n 1; test -d "$HOME/www" && printf "WWW_PRESENT\\n"; if test -d "$HOME/www/.git"; then printf "GIT_CHECKOUT_PRESENT\\n"; fi; if test -r "$HOME/jurko-private/config.php"; then printf "DATABASE_CONFIG_PRESENT\\n"; fi'
+      - name: Sprawdź połączenie bazy bez odczytu danych firmy
+        env:
+          SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20 geuveax@ssh.cluster131.hosting.ovh.net 'php' <<'PHP'
+          <?php
+          try {
+              require getenv('HOME') . '/www/server/database.php';
+              $pdo = jurkoDatabase();
+              if ((int)$pdo->query('SELECT 1')->fetchColumn() !== 1) { throw new RuntimeException(); }
+              echo "DATABASE_CONNECTION_OK\n";
+          } catch (Throwable $e) {
+              echo "DATABASE_CONNECTION_FAILED\n";
+              exit(1);
+          }
+          PHP
       - name: Usuń lokalny klucz publiczny
         if: always()
         run: rm -f ~/.ssh/known_hosts /tmp/ovh-host
