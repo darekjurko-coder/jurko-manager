@@ -1,0 +1,33 @@
+name: Test dostępu OVH
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/ovh-access.yml]
+permissions:
+  contents: read
+jobs:
+  access:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    environment: ovh-production
+    steps:
+      - name: Potwierdź wcześniej zanotowany klucz serwera
+        run: |
+          mkdir -m 700 -p ~/.ssh
+          ssh-keyscan -T 15 -t ed25519 ssh.cluster131.hosting.ovh.net > /tmp/ovh-host
+          fingerprint=$(ssh-keygen -lf /tmp/ovh-host | awk '{print $2}')
+          test "$fingerprint" = 'SHA256:N4DQHF8Pzfs8s5/QgV8tEx5NgKZeghhkDfpnO+ZG7Fo'
+          install -m 600 /tmp/ovh-host ~/.ssh/known_hosts
+      - name: Sprawdź hasło i katalog aplikacji bez zmian
+        env:
+          SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o NumberOfPasswordPrompts=1 geuveax@ssh.cluster131.hosting.ovh.net 'printf "SSH_LOGIN_OK\\n"; php -v | head -n 1; test -d "$HOME/www" && printf "WWW_PRESENT\\n"; if test -d "$HOME/www/.git"; then printf "GIT_CHECKOUT_PRESENT\\n"; fi; if test -r "$HOME/jurko-private/config.php"; then printf "DATABASE_CONFIG_PRESENT\\n"; fi'
+      - name: Usuń lokalny klucz publiczny
+        if: always()
+        run: rm -f ~/.ssh/known_hosts /tmp/ovh-host
