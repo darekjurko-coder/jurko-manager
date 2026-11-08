@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - name: Usuń wyłącznie oznaczone dane testu zjednoczonego panelu
+      - name: Usuń wyłącznie fikcyjną kartotekę testu prowizji
         env:
           SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
         run: |
@@ -28,7 +28,7 @@ jobs:
           ssh-keyscan -T 15 -t ed25519 ssh.cluster131.hosting.ovh.net > /tmp/ovh-host
           test "$(ssh-keygen -lf /tmp/ovh-host | awk '{print $2}')" = 'SHA256:N4DQHF8Pzfs8s5/QgV8tEx5NgKZeghhkDfpnO+ZG7Fo'
           install -m 600 /tmp/ovh-host ~/.ssh/known_hosts
-          sshpass -e ssh -o StrictHostKeyChecking=yes geuveax@ssh.cluster131.hosting.ovh.net 'php' < scripts/cleanup-smoke.php
+          sshpass -e ssh -o StrictHostKeyChecking=yes geuveax@ssh.cluster131.hosting.ovh.net 'php' < scripts/cleanup-sales-smoke.php
       - name: Sprzątanie klucza publicznego
         if: always()
         run: rm -f /tmp/ovh-host ~/.ssh/known_hosts
