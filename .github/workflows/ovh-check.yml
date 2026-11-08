@@ -1,0 +1,21 @@
+name: Sprawdzenie połączenia OVH
+on:
+  push:
+    branches: [codex/ovh-connection-check]
+permissions:
+  contents: read
+jobs:
+  network:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: DNS i port SSH
+        run: |
+          getent ahostsv4 ssh.cluster131.hosting.ovh.net
+          timeout 15 bash -c 'exec 3<>/dev/tcp/ssh.cluster131.hosting.ovh.net/22; head -c 100 <&3'
+      - name: Publiczne klucze serwera — do niezależnego potwierdzenia
+        run: |
+          ssh-keyscan -T 15 -t ed25519,rsa ssh.cluster131.hosting.ovh.net > /tmp/ovh-public-host-keys
+          test -s /tmp/ovh-public-host-keys
+          ssh-keygen -lf /tmp/ovh-public-host-keys
+          echo 'To nie jest weryfikacja autentyczności hosta ani próba logowania.'
