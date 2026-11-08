@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 // Plik nie ma interfejsu HTTP. Konfiguracja znajduje się poza katalogiem strony.
-if (PHP_SAPI !== 'cli') {
+if (PHP_SAPI !== 'cli' && realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
     http_response_code(404);
     exit;
 }
@@ -35,3 +35,4 @@ function jurkoDatabase(): PDO
     $pdo->exec("SET time_zone = '+00:00'");
     return $pdo;
 }
+

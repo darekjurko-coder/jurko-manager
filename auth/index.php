@@ -31,7 +31,12 @@ try {
         // Biblioteka Google weryfikuje podpis i ważność, polityka sprawdza odbiorcę, nonce i listę kont.
         $claims = $client->verifyIdToken($token['id_token']);
         if (!is_array($claims)) { throw new RuntimeException('Niepoprawny token.'); }
-        $user = jurkoAuthorizeGoogle($claims, $config['accounts'], $pending['nonce'], $config['client_id'], time());
+        if (!isset($config['accounts'][$claims['sub'] ?? ''])) {
+            $user = jurkoOwnerCandidate($claims, $config, $pending['nonce'], time());
+            jurkoBindOwner($user, $config);
+        } else {
+            $user = jurkoAuthorizeGoogle($claims, $config['accounts'], $pending['nonce'], $config['client_id'], time());
+        }
         session_regenerate_id(true);
         $_SESSION['user'] = $user;
         $_SESSION['signed_at'] = $_SESSION['last_seen'] = time();
@@ -52,3 +57,4 @@ try {
     http_response_code(503); exit('Logowanie Google nie jest jeszcze dostępne. Wymagana konfiguracja na serwerze.');
 }
 ?><!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Logowanie — JURKO MANAGER</title><h1>JURKO MANAGER</h1><p>Dostęp wyłącznie dla zatwierdzonych kont.</p><a href="?action=login">Zaloguj przez Google</a><p>Google może poprosić o potwierdzenie na telefonie. Hasło podajesz wyłącznie Google.</p></html>
+

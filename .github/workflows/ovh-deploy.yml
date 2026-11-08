@@ -1,0 +1,54 @@
+name: Wdrożenie portalu OVH
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jurko-ovh-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ovh-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, mbstring, curl, openssl
+          tools: composer:v2
+      - name: Sprawdź kod i biblioteki
+        run: |
+          composer install --no-dev --no-interaction --prefer-dist
+          composer audit
+          find server auth app tests scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/auth-policy.php
+          php tests/portal-policy.php
+          sh -n scripts/deploy-ovh.sh
+          python3 scripts/build-schema.py --check
+          tar -czf /tmp/jurko-release.tar.gz index.php .htaccess .ovhconfig server auth app vendor composer.json composer.lock
+      - name: Przygotuj prywatną konfigurację Google
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_OWNER_EMAIL: ${{ vars.GOOGLE_OWNER_EMAIL }}
+        run: php scripts/prepare-auth.php
+      - name: Potwierdź serwer i wdróż portal
+        env:
+          SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          mkdir -m 700 -p ~/.ssh
+          ssh-keyscan -T 15 -t ed25519 ssh.cluster131.hosting.ovh.net > /tmp/ovh-host
+          test "$(ssh-keygen -lf /tmp/ovh-host | awk '{print $2}')" = 'SHA256:N4DQHF8Pzfs8s5/QgV8tEx5NgKZeghhkDfpnO+ZG7Fo'
+          install -m 600 /tmp/ovh-host ~/.ssh/known_hosts
+          sshpass -e scp -o StrictHostKeyChecking=yes /tmp/jurko-release.tar.gz geuveax@ssh.cluster131.hosting.ovh.net:jurko-release.tar.gz
+          sshpass -e scp -o StrictHostKeyChecking=yes /tmp/jurko-auth.php geuveax@ssh.cluster131.hosting.ovh.net:jurko-private/auth.pending.php
+          sshpass -e ssh -o StrictHostKeyChecking=yes geuveax@ssh.cluster131.hosting.ovh.net 'sh -s' < scripts/deploy-ovh.sh
+      - name: Usuń pliki tymczasowe
+        if: always()
+        run: rm -f /tmp/jurko-auth.php /tmp/jurko-release.tar.gz /tmp/ovh-host ~/.ssh/known_hosts
