@@ -83,6 +83,18 @@ jobs:
         run: |
           sshpass -e ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20 geuveax@ssh.cluster131.hosting.ovh.net 'for p in jurko-stage jurko-deploy.lock www/app/style.css jurko-private/auth.php; do if test -e "$HOME/$p"; then printf "PRESENT %s\n" "$p"; fi; done; ps -u "$(id -u)" -o comm= | sort | uniq -c'
           curl --silent --show-error --max-time 20 --resolve koszty.jurkoseo.pl:443:87.98.236.253 -o /dev/null -w 'OVH_HTTPS_STATUS=%{http_code}\n' https://koszty.jurkoseo.pl/app/ || true
+      - name: Sprawdź publiczne DNS i ekran logowania
+        run: |
+          getent ahostsv4 koszty.jurkoseo.pl | head -n 3
+          getent ahostsv4 geuveax.cluster131.hosting.ovh.net | head -n 3
+          curl --silent --show-error --max-time 20 -L -o /tmp/jurko-login.html -w 'PUBLIC_HTTPS_STATUS=%{http_code}\n' https://koszty.jurkoseo.pl/auth/ || true
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/jurko-login.html')
+          if p.exists():
+              text=p.read_text(errors='replace')
+              print('GOOGLE_LOGIN_PAGE_OK' if 'Zaloguj przez Google' in text and '<?php' not in text else 'LOGIN_PAGE_NOT_READY')
+          PY
       - name: Usuń lokalny klucz publiczny
         if: always()
         run: rm -f ~/.ssh/known_hosts /tmp/ovh-host
