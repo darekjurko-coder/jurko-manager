@@ -77,6 +77,12 @@ jobs:
               exit(1);
           }
           PHP
+      - name: Sprawdź stan instalacji i HTTPS bez danych firmy
+        env:
+          SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=yes -o ConnectTimeout=20 geuveax@ssh.cluster131.hosting.ovh.net 'for p in jurko-stage jurko-deploy.lock www/app/style.css jurko-private/auth.php; do if test -e "$HOME/$p"; then printf "PRESENT %s\n" "$p"; fi; done; ps -u "$(id -u)" -o comm= | sort | uniq -c'
+          curl --silent --show-error --max-time 20 --resolve koszty.jurkoseo.pl:443:87.98.236.253 -o /dev/null -w 'OVH_HTTPS_STATUS=%{http_code}\n' https://koszty.jurkoseo.pl/app/ || true
       - name: Usuń lokalny klucz publiczny
         if: always()
         run: rm -f ~/.ssh/known_hosts /tmp/ovh-host
