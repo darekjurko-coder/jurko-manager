@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - name: Usuń wyłącznie jedną oznaczoną pozycję testową
+      - name: Usuń wyłącznie oznaczone dane testu zjednoczonego panelu
         env:
           SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
         run: |
