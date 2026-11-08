@@ -12,8 +12,9 @@ jobs:
       - name: DNS i port SSH
         run: |
           getent ahostsv4 ssh.cluster131.hosting.ovh.net
-          timeout 15 bash -c 'exec 3<>/dev/tcp/ssh.cluster131.hosting.ovh.net/22; head -c 100 <&3'
+          timeout 15 bash -c 'exec 3<>/dev/tcp/ssh.cluster131.hosting.ovh.net/22; IFS= read -r -t 12 banner <&3; printf "%s\\n" "$banner"'
       - name: Publiczne klucze serwera — do niezależnego potwierdzenia
+        if: always()
         run: |
           ssh-keyscan -T 15 -t ed25519,rsa ssh.cluster131.hosting.ovh.net > /tmp/ovh-public-host-keys
           test -s /tmp/ovh-public-host-keys
