@@ -1,0 +1,43 @@
+name: Konfiguracja MySQL OVH
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jurko-ovh-production
+  cancel-in-progress: false
+jobs:
+  database-config:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: ovh-production
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+      - name: Przygotuj prywatną konfigurację
+        env:
+          JURKO_DB_PASSWORD: ${{ secrets.JURKO_DB_PASSWORD }}
+        run: |
+          php -l scripts/prepare-db.php
+          php -l scripts/install-db.php
+          php scripts/prepare-db.php
+      - name: Potwierdź klucz serwera i sprawdź bazę
+        env:
+          SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          mkdir -m 700 -p ~/.ssh
+          ssh-keyscan -T 15 -t ed25519 ssh.cluster131.hosting.ovh.net > /tmp/ovh-host
+          test "$(ssh-keygen -lf /tmp/ovh-host | awk '{print $2}')" = 'SHA256:N4DQHF8Pzfs8s5/QgV8tEx5NgKZeghhkDfpnO+ZG7Fo'
+          install -m 600 /tmp/ovh-host ~/.ssh/known_hosts
+          sshpass -e ssh -o StrictHostKeyChecking=yes geuveax@ssh.cluster131.hosting.ovh.net 'mkdir -p "$HOME/jurko-private" && chmod 700 "$HOME/jurko-private"'
+          sshpass -e scp -o StrictHostKeyChecking=yes /tmp/jurko-db-config.php geuveax@ssh.cluster131.hosting.ovh.net:jurko-private/config.pending.php
+          sshpass -e ssh -o StrictHostKeyChecking=yes geuveax@ssh.cluster131.hosting.ovh.net 'php' < scripts/install-db.php
+      - name: Usuń konfigurację z maszyny testowej
+        if: always()
+        run: rm -f /tmp/jurko-db-config.php /tmp/ovh-host ~/.ssh/known_hosts
