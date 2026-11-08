@@ -16,14 +16,14 @@ if test -f jurko-private/auth.php; then cp jurko-private/auth.php "jurko-private
 mkdir jurko-stage
 tar -xzf jurko-release.tar.gz -C jurko-stage
 php jurko-stage/server/migrate.php
-find jurko-stage -type d -exec chmod 755 {} \;
-find jurko-stage -type f -exec chmod 644 {} \;
+find jurko-stage -type d -exec chmod 755 {} +
+find jurko-stage -type f -exec chmod 644 {} +
 if test -f www/.htaccess; then cp www/.htaccess "jurko-private/backups/htaccess-$stamp"; fi
 printf '%s\n' 'Require all denied' > www/.htaccess
 cp -R jurko-stage/server jurko-stage/auth jurko-stage/app jurko-stage/vendor www/
 cp jurko-stage/index.php jurko-stage/composer.json jurko-stage/composer.lock jurko-stage/.ovhconfig www/
-find www/server www/auth www/app www/vendor -type d -exec chmod 755 {} \;
-find www/server www/auth www/app www/vendor -type f -exec chmod 644 {} \;
+find www/server www/auth www/app www/vendor -type d -exec chmod 755 {} +
+find www/server www/auth www/app www/vendor -type f -exec chmod 644 {} +
 printf '%s\n' 'Require all denied' > www/vendor/.htaccess
 chmod 644 www/index.php www/composer.json www/composer.lock www/.ovhconfig www/vendor/.htaccess
 mv jurko-private/auth.pending.php jurko-private/auth.php
