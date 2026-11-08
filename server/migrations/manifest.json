@@ -11,5 +11,6 @@
   "tasks/010_task_persistence.sql",
   "employees/011_employee_identity.sql",
   "core/012_module_revisions.sql",
-  "core/013_write_requests.sql"
+  "core/013_write_requests.sql",
+  "sales/014_commissions.sql"
 ]

@@ -15,7 +15,7 @@ try{
     header('Content-Type: text/html; charset=utf-8');
     $boot='<script nonce="'.htmlspecialchars($nonce,ENT_QUOTES).'">window.JurkoInitial='.json_encode($state,JSON_THROW_ON_ERROR|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).';</script>';
     $html=file_get_contents(__DIR__.'/server/owner-panel.html');
-    foreach(['portal-client.js','staff.js','owner-panel.js'] as $asset){
+    foreach(['portal-client.js','staff.js','owner-panel.js','sales.js'] as $asset){
         $version=substr(hash_file('sha256',__DIR__.'/'.$asset),0,16);
         $html=str_replace('src="/'.$asset.'"','src="/'.$asset.'?v='.$version.'"',$html);
     }
