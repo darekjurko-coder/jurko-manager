@@ -30,10 +30,11 @@ function jurkoSalesParseGrid(array $grid,string $month): array {
             $key=$number.':'.$date;if(isset($seen[$key]))throw new InvalidArgumentException('Powtórzony dokument w tym pliku: '.$number);$seen[$key]=true;
             $extra=[];for($j=9;$j<count($r);$j++)if((string)$r[$j]!=='')$extra[]=chr(65+$j).': '.(string)$r[$j];
             $note='Sekcja: '.$section.'; wiersz '.($i+1).'. '.implode(' | ',$extra);if(substr($date,0,7)!==$month)$note.=' Uwaga: data dokumentu poza miesiącem raportu.';
-            $documents[]=['source_row'=>$i+1,'document_no'=>jurkoText($number,100),'document_type'=>$type,'document_date'=>$date,'customer'=>jurkoText((string)($r[0]??''),250),'invoice_net'=>jurkoDecimal(jurkoCents((float)$r[3])),'source_deduction'=>jurkoDecimal(jurkoCents((float)$r[4])),'turnover_net'=>jurkoDecimal(jurkoCents((float)$r[5])),'source_profit'=>jurkoDecimal(jurkoCents((float)$r[6])),'note'=>mb_substr($note,0,4000)];
+            $documents[]=['source_row'=>$i+1,'document_no'=>jurkoText($number,100),'document_type'=>$type,'document_date'=>$date,'customer'=>jurkoText((string)($r[0]??''),250),'invoice_net'=>jurkoDecimal(jurkoCents((float)$r[3])),'source_deduction'=>jurkoDecimal(jurkoCents((float)$r[4])),'turnover_net'=>jurkoDecimal(jurkoCents((float)$r[5])),'source_profit'=>jurkoDecimal(jurkoCents((float)$r[6])),'commission_included'=>preg_match('/przysz/iu',$section)!==1,'note'=>mb_substr($note,0,4000)];
         }else{
             $nonempty=array_filter($r,static fn($x)=>(string)$x!=='');
             if($i>1&&is_numeric($r[1]??null)&&(float)$r[1]===0.0&&is_string($r[0]??null)&&$r[0]!=='')$section=$r[0];
+            if($i>1&&count($nonempty)===1&&is_string($r[0]??null)&&$r[0]!=='')$section=$r[0];
             if($i>1&&$nonempty)$notes[]=['row'=>$i+1,'text'=>implode(' | ',array_map(static fn($x)=>(string)$x,$nonempty))];
         }
     }
@@ -49,7 +50,7 @@ function jurkoSalesImport(PDO $db,int $actor,array $preview): array {
         foreach($source['documents'] as $d){
             $q=$db->prepare('SELECT source_profit,invoice_net,turnover_net FROM jm_sales_documents WHERE employee_id=? AND company=? AND document_no=? AND document_date=?');$q->execute([$emp,$company,$d['document_no'],$d['document_date']]);$existing=$q->fetch();
             if($existing){foreach(['source_profit','invoice_net','turnover_net'] as $field)if(jurkoCents($existing[$field])!==jurkoCents($d[$field]))throw new DomainException('Dokument '.$d['document_no'].' jest już w bazie z innymi kwotami. Import zatrzymany bez nadpisywania.');continue;}
-            $db->prepare('INSERT INTO jm_sales_documents(employee_id,import_id,source_row,company,document_no,document_type,document_date,settlement_month,customer,invoice_net,turnover_net,source_deduction,source_profit,note) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$emp,$import,$d['source_row'],$company,$d['document_no'],$d['document_type'],$d['document_date'],$month,$d['customer'],$d['invoice_net'],$d['turnover_net'],$d['source_deduction'],$d['source_profit'],$d['note']]);$count++;
+            $db->prepare('INSERT INTO jm_sales_documents(employee_id,import_id,source_row,company,document_no,document_type,document_date,settlement_month,customer,invoice_net,turnover_net,source_deduction,source_profit,note,commission_included) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')->execute([$emp,$import,$d['source_row'],$company,$d['document_no'],$d['document_type'],$d['document_date'],$month,$d['customer'],$d['invoice_net'],$d['turnover_net'],$d['source_deduction'],$d['source_profit'],$d['note'],($d['commission_included']??true)?1:0]);$count++;
         }
         jurkoSalesTouch($db,$emp,$month);jurkoAudit($db,$actor,'import','sales_import',(string)$import);$db->commit();return ['imported'=>$count,'duplicate'=>false];
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}

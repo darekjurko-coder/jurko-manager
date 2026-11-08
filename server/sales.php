@@ -29,7 +29,7 @@ function jurkoSalesCalculate(array $docs,array $costs,?int $rate): array {
         if($d['document_type']==='order'){if(!$d['reviewed'])$unreviewed++;continue;}
         $turnover+=jurkoCents($d['turnover_net']);$invoices+=jurkoCents($d['invoice_net']??$d['turnover_net']);
         $p=jurkoCents($d['profit_override']??$d['source_profit']);$profit+=$p;$c=$byDoc[(string)$d['id']]??0;$allCost+=$c;
-        $eligible+=(int)round(($p-$c)*(int)$d['share_bp']/10000,0,PHP_ROUND_HALF_UP);
+        if(($d['commission_included']??true))$eligible+=(int)round(($p-$c)*(int)$d['share_bp']/10000,0,PHP_ROUND_HALF_UP);
         if(!$d['reviewed'])$unreviewed++;
     }
     $commission=$rate===null?null:(int)round($eligible*$rate/10000,0,PHP_ROUND_HALF_UP);
@@ -71,7 +71,8 @@ function jurkoSalesWrite(PDO $db,int $actor,array $input): array {
             $newMonth=jurkoMonth($p['settlement_month']??null);$share=jurkoCents($p['share']??'');if($share<0||$share>10000)throw new InvalidArgumentException('Udział dokumentu musi wynosić od 0 do 100%.');
             $profit=($p['profit_override']??'')===''?null:jurkoDecimal(jurkoCents($p['profit_override']));$note=jurkoText($p['note']??'',4000,true);
             $reviewed=($p['reviewed']??false)===true?1:0;
-            $db->prepare('UPDATE jm_sales_documents SET settlement_month=?,share_bp=?,profit_override=?,note=?,reviewed=?,version=version+1 WHERE id=?')->execute([$newMonth,$share,$profit,$note,$reviewed,$d['id']]);
+            $included=($p['commission_included']??true)===true?1:0;
+            $db->prepare('UPDATE jm_sales_documents SET settlement_month=?,share_bp=?,profit_override=?,note=?,reviewed=?,commission_included=?,version=version+1 WHERE id=?')->execute([$newMonth,$share,$profit,$note,$reviewed,$included,$d['id']]);
             jurkoSalesTouch($db,$employee,$d['settlement_month']);if($newMonth!==$d['settlement_month'])jurkoSalesTouch($db,$employee,$newMonth);
         }elseif($action==='cost_add'){
             $category=jurkoEnum($p['category']??null,['transport','cutting','architect','other']);$description=jurkoText($p['description']??null,250);

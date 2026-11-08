@@ -185,6 +185,7 @@ CREATE TABLE IF NOT EXISTS jm_sales_documents (
  share_bp SMALLINT UNSIGNED NOT NULL DEFAULT 10000,
  note TEXT NOT NULL,
  reviewed BOOLEAN NOT NULL DEFAULT FALSE,
+ commission_included BOOLEAN NOT NULL DEFAULT TRUE,
  version BIGINT UNSIGNED NOT NULL DEFAULT 1,
  UNIQUE KEY(employee_id,company,document_no,document_date),
  INDEX(employee_id,settlement_month),
