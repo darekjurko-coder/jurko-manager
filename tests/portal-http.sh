@@ -29,7 +29,12 @@ test "$(curl -s -H 'Cookie: __Host-jurko=synthetichttpowner1234567890' -o /tmp/j
 test "$(curl -s -H 'Cookie: __Host-jurko=synthetichttpowner1234567890' -H 'Content-Type: application/json' -d '{}' -o /tmp/jurko-csrf.json -w '%{http_code}' http://127.0.0.1:8091/portal-api.php)" = 403
 python3 - <<'PY'
 from pathlib import Path
+import hashlib
+import os
 html=Path('/tmp/jurko-owner.html').read_text()
+for asset in ['portal-client.js','staff.js','owner-panel.js']:
+    digest=hashlib.sha256((Path(os.environ['JURKO_HTTP_ROOT'])/asset).read_bytes()).hexdigest()[:16]
+    assert f'src="/{asset}?v={digest}"' in html
 assert 'CENTRUM ZARZĄDZANIA' in html and 'window.JurkoInitial' in html
 assert 'http-ci@example.invalid' not in html and 'client_secret' not in html
 assert 'synthetic-csrf' not in Path('/tmp/jurko-anon.html').read_text()
