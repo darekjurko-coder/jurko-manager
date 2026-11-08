@@ -23,17 +23,17 @@ function jurkoSalesTouch(PDO $db,int $employee,string $month): void {
 function jurkoSalesCalculate(array $docs,array $costs,?int $rate): array {
     $byDoc=[];$unassigned=0;
     foreach($costs as $c){$n=jurkoCents($c['amount_net']);if($c['document_id']===null)$unassigned+=$n;else $byDoc[(string)$c['document_id']]=($byDoc[(string)$c['document_id']]??0)+$n;}
-    $turnover=0;$profit=0;$allCost=$unassigned;$eligible=-$unassigned;$unreviewed=0;$counts=['invoice'=>0,'correction'=>0,'order'=>0,'other'=>0];
+    $turnover=0;$invoices=0;$profit=0;$allCost=$unassigned;$eligible=-$unassigned;$unreviewed=0;$counts=['invoice'=>0,'correction'=>0,'order'=>0,'other'=>0];
     foreach($docs as $d){
         $counts[$d['document_type']]++;
         if($d['document_type']==='order'){if(!$d['reviewed'])$unreviewed++;continue;}
-        $turnover+=jurkoCents($d['turnover_net']);
+        $turnover+=jurkoCents($d['turnover_net']);$invoices+=jurkoCents($d['invoice_net']??$d['turnover_net']);
         $p=jurkoCents($d['profit_override']??$d['source_profit']);$profit+=$p;$c=$byDoc[(string)$d['id']]??0;$allCost+=$c;
         $eligible+=(int)round(($p-$c)*(int)$d['share_bp']/10000,0,PHP_ROUND_HALF_UP);
         if(!$d['reviewed'])$unreviewed++;
     }
     $commission=$rate===null?null:(int)round($eligible*$rate/10000,0,PHP_ROUND_HALF_UP);
-    return ['turnover'=>jurkoDecimal($turnover),'profit'=>jurkoDecimal($profit),'costs'=>jurkoDecimal($allCost),'adjusted_profit'=>jurkoDecimal($profit-$allCost),'eligible_profit'=>jurkoDecimal($eligible),'margin'=>$turnover===0?null:round(($profit-$allCost)/$turnover*100,2),'commission'=>$commission===null?null:jurkoDecimal($commission),'rate_bp'=>$rate,'unreviewed'=>$unreviewed,'counts'=>$counts,'documents'=>count($docs),'ready'=>$unreviewed===0&&$rate!==null&&count($docs)>0];
+    return ['invoice_turnover'=>jurkoDecimal($invoices),'turnover'=>jurkoDecimal($turnover),'profit'=>jurkoDecimal($profit),'costs'=>jurkoDecimal($allCost),'adjusted_profit'=>jurkoDecimal($profit-$allCost),'eligible_profit'=>jurkoDecimal($eligible),'margin'=>$turnover===0?null:round(($profit-$allCost)/$turnover*100,2),'commission'=>$commission===null?null:jurkoDecimal($commission),'rate_bp'=>$rate,'unreviewed'=>$unreviewed,'counts'=>$counts,'documents'=>count($docs),'ready'=>$unreviewed===0&&$rate!==null&&count($docs)>0];
 }
 function jurkoSalesState(PDO $db,string $publicId,string $month): array {
     $e=jurkoSalesEmployee($db,$publicId);$m=jurkoSalesMonth($db,(int)$e['id'],$month);
