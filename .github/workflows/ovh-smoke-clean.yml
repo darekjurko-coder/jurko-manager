@@ -1,0 +1,34 @@
+name: Porządkowanie po teście portalu
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/ovh-smoke-clean.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jurko-ovh-production
+  cancel-in-progress: false
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    environment: ovh-production
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Usuń wyłącznie jedną oznaczoną pozycję testową
+        env:
+          SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
+        run: |
+          test -n "$SSHPASS"
+          sudo apt-get update -qq
+          sudo apt-get install -y sshpass
+          mkdir -m 700 -p ~/.ssh
+          ssh-keyscan -T 15 -t ed25519 ssh.cluster131.hosting.ovh.net > /tmp/ovh-host
+          test "$(ssh-keygen -lf /tmp/ovh-host | awk '{print $2}')" = 'SHA256:N4DQHF8Pzfs8s5/QgV8tEx5NgKZeghhkDfpnO+ZG7Fo'
+          install -m 600 /tmp/ovh-host ~/.ssh/known_hosts
+          sshpass -e ssh -o StrictHostKeyChecking=yes geuveax@ssh.cluster131.hosting.ovh.net 'php' < scripts/cleanup-smoke.php
+      - name: Sprzątanie klucza publicznego
+        if: always()
+        run: rm -f /tmp/ovh-host ~/.ssh/known_hosts
