@@ -1,6 +1,6 @@
 # JURKO MANAGER
 
-Polish-language finance demo for JURKO, published at https://koszty.jurkoseo.pl.
+Polish-language owner portal for JURKO, published at https://koszty.jurkoseo.pl/index.html.
 
 ## Structure
 - `index.html`: standalone HTML, CSS and JavaScript app. No build dependencies.
@@ -8,7 +8,7 @@ Polish-language finance demo for JURKO, published at https://koszty.jurkoseo.pl.
 
 ## Working rules
 - Keep all user-facing text in Polish.
-- This is a demo using localStorage, without authentication, a backend or accounting integrations. Preserve the visible demo notice until those features are actually implemented.
+- Finance, tasks and staff planning use MySQL and owner Google sign-in. Keep unfinished integrations explicitly marked as planned. Never put production records in localStorage.
 - Never commit credentials or real company financial records.
 - Keep unrelated JURKO websites, repositories and DNS records unchanged.
 - Check changed interactions in a browser; use synthetic records only and remove test records afterward.

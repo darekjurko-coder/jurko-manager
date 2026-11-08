@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require __DIR__ . '/../server/database.php';
 $pdo = jurkoDatabase();
-if ((int)$pdo->query('SELECT COUNT(*) FROM jm_migration_files')->fetchColumn() !== 8) {
+if ((int)$pdo->query('SELECT COUNT(*) FROM jm_migration_files')->fetchColumn() !== count(json_decode(file_get_contents(__DIR__.'/../server/migrations/manifest.json'),true))) {
     throw new RuntimeException('Niepełna historia.');
 }
 // Dane syntetyczne wyłącznie w transakcji, zawsze wycofywane.

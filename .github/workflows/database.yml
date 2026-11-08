@@ -25,6 +25,11 @@ jobs:
       - name: Składnia i spójność schematu
         run: |
           find server auth app tests scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l portal.php
+          php -l portal-api.php
+          node --check owner-panel.js
+          node --check portal-client.js
+          node --check staff.js
           python3 scripts/build-schema.py --check
           php tests/auth-policy.php
           php tests/portal-policy.php
@@ -49,6 +54,8 @@ jobs:
           php server/migrate.php
           php tests/database.php
           php tests/finance-database.php
+          php tests/unified-database.php
+          sh tests/portal-http.sh
       - name: Zmiana starej migracji musi być odrzucona
         run: |
           echo '-- zmieniona historia' >> server/migrations/core/001_migrations.sql

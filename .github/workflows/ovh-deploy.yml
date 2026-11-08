@@ -28,7 +28,7 @@ jobs:
           php tests/portal-policy.php
           sh -n scripts/deploy-ovh.sh
           python3 scripts/build-schema.py --check
-          tar -czf /tmp/jurko-release.tar.gz index.php .htaccess .ovhconfig server auth app vendor composer.json composer.lock
+          tar -czf /tmp/jurko-release.tar.gz index.php index.html pracownik.html portal.php portal-api.php portal-client.js owner-panel.js staff.js .htaccess .ovhconfig server auth app vendor composer.json composer.lock scripts/backup-db.php
       - name: Przygotuj prywatną konfigurację Google
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
