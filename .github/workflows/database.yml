@@ -20,16 +20,18 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.4"
-          extensions: pdo_mysql, mbstring, curl, openssl
+          extensions: pdo_mysql, mbstring, curl, openssl, gd, zip, xml, xmlreader, xmlwriter
           tools: composer:v2
       - name: Składnia i spójność schematu
         run: |
           find server auth app tests scripts -name '*.php' -print0 | xargs -0 -n1 php -l
           php -l portal.php
           php -l portal-api.php
+          php -l sales-api.php
           node --check owner-panel.js
           node --check portal-client.js
           node --check staff.js
+          node --check sales.js
           python3 scripts/build-schema.py --check
           php tests/auth-policy.php
           php tests/portal-policy.php
@@ -55,6 +57,7 @@ jobs:
           php tests/database.php
           php tests/finance-database.php
           php tests/unified-database.php
+          php tests/sales-database.php
           sh tests/portal-http.sh
       - name: Zmiana starej migracji musi być odrzucona
         run: |

@@ -10,14 +10,14 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     environment: ovh-production
     steps:
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.4'
-          extensions: pdo_mysql, mbstring, curl, openssl
+          extensions: pdo_mysql, mbstring, curl, openssl, gd, zip, xml, xmlreader, xmlwriter
           tools: composer:v2
       - name: Sprawdź kod i biblioteki
         run: |
@@ -28,7 +28,7 @@ jobs:
           php tests/portal-policy.php
           sh -n scripts/deploy-ovh.sh
           python3 scripts/build-schema.py --check
-          tar -czf /tmp/jurko-release.tar.gz index.php index.html pracownik.html portal.php portal-api.php portal-client.js owner-panel.js staff.js .htaccess .ovhconfig server auth app vendor composer.json composer.lock scripts/backup-db.php
+          tar -czf /tmp/jurko-release.tar.gz index.php index.html pracownik.html portal.php portal-api.php sales-api.php sales.js portal-client.js owner-panel.js staff.js .htaccess .ovhconfig server auth app vendor composer.json composer.lock scripts/backup-db.php
       - name: Przygotuj prywatną konfigurację Google
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
