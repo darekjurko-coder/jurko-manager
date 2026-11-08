@@ -14,6 +14,7 @@ jobs:
     environment: ovh-production
     steps:
       - name: Potwierdź wcześniej zanotowany klucz serwera
+        id: host
         run: |
           mkdir -m 700 -p ~/.ssh
           ssh-keyscan -T 15 -t ed25519 ssh.cluster131.hosting.ovh.net > /tmp/ovh-host
@@ -33,19 +34,25 @@ jobs:
               print("PASSWORD_FORMAT_INVALID: zapis nie spełnia wymagań formularza OVH.")
               sys.exit(1)
           print("PASSWORD_FORMAT_OK")
+          stage = "CONNECT"
           try:
               with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=20) as ftp:
                   ftp.connect("ftp.cluster131.hosting.ovh.net", 21)
-                  ftp.login("geuveax", password)
+                  stage = "AUTH_TLS"
+                  ftp.auth()
+                  stage = "LOGIN"
+                  ftp.login("geuveax", password, secure=False)
                   print("FTPS_LOGIN_OK")
-          except ftplib.error_perm:
-              print("FTPS_AUTH_REJECTED")
+          except ftplib.error_perm as exc:
+              code = str(exc)[:3]
+              print("FTPS_REJECTED_STAGE", stage, "CODE", code if code.isdigit() else "unknown")
               sys.exit(1)
           except Exception as exc:
               print("FTPS_CONNECTION_ERROR:", type(exc).__name__)
               sys.exit(1)
           PY
       - name: Sprawdź hasło i katalog aplikacji bez zmian
+        if: always() && steps.host.outcome == 'success'
         env:
           SSHPASS: ${{ secrets.OVH_SSH_PASSWORD }}
         run: |
