@@ -1,27 +1,23 @@
 # JURKO MANAGER
 
-Demonstracyjny panel kosztów i finansów JURKO.
+Panel właściciela: https://koszty.jurkoseo.pl/index.html
 
-Aplikacja: https://koszty.jurkoseo.pl/
+## Działająca aplikacja
 
-## Funkcje
-- Przychody i koszty netto dla JURKO sp. z o.o. oraz JURKO sp. z o.o. sp.k.
-- Filtrowanie według spółki, rejestr zapisów i eksport CSV.
-- Zapis lokalny w przeglądarce (localStorage).
+OVH uruchamia PHP 8.4 i MySQL. Dostęp wymaga zatwierdzonego konta Google właściciela. Finanse obu spółek, zadania oraz kartoteki, plany i ustawienia premii pracowników zapisują się we wspólnej bazie. Panel nie korzysta z localStorage. Dawny adres `/app/` kieruje do tego samego panelu.
 
-## Uruchomienie podglądu
+WAPRO, banki, KSeF, magazyny i pozostałe oznaczone moduły czekają na podłączenie. Symulacja premii nie nalicza listy płac. Saldo ewidencji nie jest wynikiem księgowym ani saldem bankowym.
 
-```sh
-python3 -m http.server 8000
-```
+## Kod i wdrożenie
 
-Otwórz http://localhost:8000. Aplikacja nie wymaga instalacji zależności ani kompilacji.
+- `portal.php`: chronione wejście pod `/index.html` przez regułę Apache.
+- `server/owner-panel.html`, `owner-panel.js`, `staff.js`: wygląd i obsługa panelu.
+- `portal-api.php`, `server/portal-data.php`: kontrola sesji, CSRF, walidacja i zapis MySQL.
+- `server/migrations/`: uporządkowane migracje z kontrolą integralności.
+- `auth/`: logowanie Google. Konfiguracja i klucze pozostają poza katalogiem strony i repozytorium.
 
-## Publikacja
-GitHub Pages publikuje gałąź `main`, katalog główny. Plik `CNAME` wskazuje `koszty.jurkoseo.pl`; zachowaj go przy zmianach. Aktualizacje na `main` uruchamiają publikację.
+Testy wykonuje workflow „Kontrola bazy MySQL”. Wdrożenie na OVH uruchamia się osobno przez „Wdrożenie portalu OVH” z gałęzi `main`. Przed migracją powstaje prywatna kopia bazy i plików. Samo zatwierdzenie kodu na GitHubie nie wdraża PHP na OVH.
 
-## Ograniczenia wersji demo
-Brak logowania, serwera, wspólnej bazy danych oraz integracji bankowych i WAPRO. Dane są przechowywane tylko w danej przeglądarce. Nie wprowadzaj poufnych danych finansowych. Saldo ewidencji nie jest wynikiem księgowym ani saldem bankowym.
+GitHub Pages nie obsługuje PHP ani produkcyjnego logowania. `CNAME` zachowujemy; produkcyjna domena wskazuje OVH. Lokalny prosty serwer statyczny nie uruchomi chronionego panelu.
 
-## Praca z Codexem
-Instrukcje projektu znajdują się w `AGENTS.md`. Wybieraj repozytorium `darekjurko-coder/jurko-manager`. Zmiany w tej aplikacji nie powinny dotyczyć pozostałych stron JURKO.
+Szczegóły: `JEDEN_PANEL.md`, `server/WDROZENIE.md`, `AGENTS.md`. Nie zapisuj haseł ani rzeczywistych danych firmowych w repozytorium.
