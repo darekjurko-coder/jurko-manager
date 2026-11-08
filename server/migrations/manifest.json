@@ -6,5 +6,10 @@
   "employees/005_bonuses.sql",
   "finance/006_entries.sql",
   "tasks/007_tasks.sql",
-  "audit/008_log.sql"
+  "audit/008_log.sql",
+  "finance/009_entry_archive.sql",
+  "tasks/010_task_persistence.sql",
+  "employees/011_employee_identity.sql",
+  "core/012_module_revisions.sql",
+  "core/013_write_requests.sql"
 ]

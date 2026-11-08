@@ -105,3 +105,29 @@ CREATE TABLE IF NOT EXISTS jm_audit_log (
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
  FOREIGN KEY (actor_id) REFERENCES jm_accounts(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: finance/009_entry_archive.sql
+ALTER TABLE jm_financial_entries ADD COLUMN deleted_at DATETIME NULL;
+
+-- Moduł: tasks/010_task_persistence.sql
+ALTER TABLE jm_tasks ADD COLUMN owner_label VARCHAR(80) NOT NULL DEFAULT '', ADD COLUMN deleted_at DATETIME NULL, ADD COLUMN version BIGINT UNSIGNED NOT NULL DEFAULT 1;
+
+-- Moduł: employees/011_employee_identity.sql
+ALTER TABLE jm_employees ADD COLUMN public_id VARCHAR(64) NULL UNIQUE, ADD COLUMN plan_metric ENUM('turnover','tasks','deliveries') NOT NULL DEFAULT 'turnover';
+
+-- Moduł: core/012_module_revisions.sql
+CREATE TABLE IF NOT EXISTS jm_module_revisions (
+ module_key VARCHAR(32) PRIMARY KEY,
+ version BIGINT UNSIGNED NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: core/013_write_requests.sql
+CREATE TABLE IF NOT EXISTS jm_write_requests (
+ actor_id BIGINT UNSIGNED NOT NULL,
+ request_id CHAR(36) NOT NULL,
+ action VARCHAR(32) NOT NULL,
+ payload_hash CHAR(64) NOT NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY (actor_id,request_id),
+ FOREIGN KEY (actor_id) REFERENCES jm_accounts(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

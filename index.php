@@ -1,4 +1,4 @@
 <?php
 header('Cache-Control: no-store');
-header('Location: /app/', true, 303);
+header('Location: /index.html',true,303);
 exit;
