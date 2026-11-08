@@ -1,0 +1,6 @@
+DirectoryIndex index.php
+Options -Indexes
+<FilesMatch "^(composer\.(json|lock)|AGENTS\.md|.*\.sql)$">
+Require all denied
+</FilesMatch>
+RedirectMatch 404 /\.git

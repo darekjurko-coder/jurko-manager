@@ -13,6 +13,7 @@ session_name('__Host-jurko');
 session_set_cookie_params(['lifetime'=>0,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Lax']);
 session_start();
 require_once __DIR__ . '/auth-policy.php';
+require_once __DIR__ . '/owner.php';
 function jurkoAuthConfig(): array
 {
     $path = dirname(__DIR__, 2) . '/jurko-private/auth.php';
@@ -25,6 +26,13 @@ function jurkoAuthConfig(): array
     if (($u['scheme'] ?? '') !== 'https' || isset($u['user']) || isset($u['pass'])
         || ($u['path'] ?? '') !== '/auth/index.php' || !is_array($c['accounts'] ?? null)) {
         throw new RuntimeException('Niepoprawna konfiguracja.');
+    }
+    $ownerPath = dirname(__DIR__, 2) . '/jurko-private/owner.json';
+    if (is_file($ownerPath)) {
+        $owner = json_decode(file_get_contents($ownerPath), true, 512, JSON_THROW_ON_ERROR);
+        if (is_string($owner['sub'] ?? null) && ($owner['email'] ?? null) === ($c['owner_email'] ?? null)) {
+            $c['accounts'][$owner['sub']] = ['role'=>'owner', 'email'=>$owner['email']];
+        }
     }
     return $c;
 }
@@ -39,3 +47,4 @@ function jurkoCurrentUser(array $config): ?array
     return ['sub'=>$u['sub'], 'role'=>$role];
 }
 function jurkoEscape(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+
