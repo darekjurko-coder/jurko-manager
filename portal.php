@@ -7,6 +7,12 @@ try{
     $config=jurkoAuthConfig();$user=jurkoCurrentUser($config);
     if(!$user){header('Location: /auth/',true,303);exit;}
     $db=jurkoDatabase();jurkoFinanceAccount($db,$user,$config);
+    if (isset($_GET['original_report']) || isset($_GET['report_api']) || isset($_GET['report_asset'])) {
+        require_once __DIR__.'/server/original-report/route.php';
+        jurkoOriginalReport($db);
+        exit;
+    }
+
     $month=jurkoMonth($_GET['month']??date('Y-m'));
     $state=jurkoPortalState($db,$month);
     $state['csrf']=$_SESSION['csrf'];
