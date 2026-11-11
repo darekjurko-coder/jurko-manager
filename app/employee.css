@@ -1,0 +1,13 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #f2f5f1; color: #182923; font: 1rem/1.5 system-ui, sans-serif; }
+main { max-width: 920px; margin: auto; padding: clamp(16px, 4vw, 44px); }
+header, section { background: white; border: 1px solid #dce5dc; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+header { background: #17392e; color: white; }
+header a { color: #dcffe8; }
+h1, h2 { margin: 0 0 12px; }
+header p { margin: 0 0 8px; }
+form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 12px 0; }
+label { display: grid; gap: 4px; }
+input, select, button { font: inherit; padding: 8px 10px; border: 1px solid #bbc9bf; border-radius: 6px; max-width: 100%; }
+button { background: #246348; color: white; cursor: pointer; }
+[role="alert"] { color: #942725; }

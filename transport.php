@@ -5,6 +5,8 @@ require __DIR__.'/server/auth-bootstrap.php';
 require_once __DIR__.'/server/database.php';
 require_once __DIR__.'/server/finance.php';
 
+require_once __DIR__.'/server/employee-portal.php';
+
 const FACTORIES = [
     'Polska' => ['Tubądzin', 'Paradyż', 'Cerrad'],
     'Włochy' => ['Novabell', 'Italgraniti'],
@@ -67,17 +69,20 @@ function transportNumber(array $order): string
 
 try {
     $config = jurkoAuthConfig();
-    $user = jurkoCurrentUser($config);
+    $db = jurkoDatabase();
+    $staff = jurkoStaffAccount($db, $_SESSION['user'] ?? []);
+    $user = $staff ? ['role'=>'employee'] : jurkoCurrentUser($config);
     if (!$user) {
         header('Location: /auth/', true, 303);
         exit;
     }
-    $db = jurkoDatabase();
     $owner = $user['role'] === 'owner';
     if ($owner) {
         $actor = jurkoFinanceAccount($db, $user, $config);
+    } elseif ($staff) {
+        $actor = (int)$staff['id'];
     } else {
-        $query = $db->prepare("SELECT id FROM jm_accounts WHERE email = ? AND role = ? AND active = TRUE");
+        $query = $db->prepare("SELECT id FROM jm_accounts WHERE email = ? AND role = ? AND active = TRUE AND staff_login IS NULL");
         $query->execute([$user['transport_email'] ?? $config['accounts'][$user['sub']]['email'] ?? '', $user['role']]);
         $actor = (int)$query->fetchColumn();
         if (!$actor) {
@@ -121,9 +126,9 @@ try {
                     }
                     $active = choice('access', ['enable','disable']) === 'enable';
                     if ($active) {
-                        $query = $db->prepare("INSERT INTO jm_accounts (email,role,active) VALUES (?,'employee',TRUE) ON DUPLICATE KEY UPDATE active=IF(role='employee',TRUE,active)");
+                        $query = $db->prepare("INSERT INTO jm_accounts (email,role,active) VALUES (?,'employee',TRUE) ON DUPLICATE KEY UPDATE active=IF(role='employee' AND staff_login IS NULL,TRUE,active)");
                     } else {
-                        $query = $db->prepare("UPDATE jm_accounts SET active=FALSE WHERE email=? AND role='employee'");
+                        $query = $db->prepare("UPDATE jm_accounts SET active=FALSE WHERE email=? AND role='employee' AND staff_login IS NULL");
                     }
                     $query->execute([$email]);
                     break;
@@ -160,7 +165,7 @@ try {
                         throw new InvalidArgumentException('Sprawdź datę dostawy i odśwież formularz.');
                     }
                     $query = $db->prepare('INSERT INTO jm_transport_orders (account_id,factory_id,carrier_id,company,reference,delivery_address,pickup_date,delivery_date,pallets,weight_kg,agreed_net,currency,notes,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id');
-                    $query->execute([$actor,$factory,$carrier,choice('company',array_keys(COMPANIES)),field('reference',150,true),
+                    $query->execute([$actor,$factory,$carrier,($staff ? 'spk' : choice('company',array_keys(COMPANIES))),field('reference',150,true),
                         field('delivery_address',300,true),$pickup,$delivery,numberField('pallets',6,true,true),
                         numberField('weight',8,true),numberField('agreed',10),choice('currency',['PLN','EUR']),field('notes',6000),$request]);
                     break;
@@ -191,7 +196,7 @@ try {
                             carrier_invoice=?, actual_net=? WHERE id=?");
                         $query->execute([$status,field('goods_invoice',150),$pdf,$pdf,$invoice,$invoice,$actual,$id]);
                     } else {
-                        $query = $db->prepare('UPDATE jm_transport_orders SET status=?, goods_invoice=? WHERE id=? AND account_id=?');
+                        $query = $db->prepare('UPDATE jm_transport_orders SET status=?, goods_invoice=? WHERE id=? AND account_id=?'.($staff ? " AND company='spk'" : ''));
                         $query->execute([$status,field('goods_invoice',150),$id,$actor]);
                     }
                     break;
@@ -207,7 +212,7 @@ try {
     }
     $saved = !empty($_SESSION['transport_saved']);
     unset($_SESSION['transport_saved']);
-    $employees = $owner ? $db->query("SELECT email,active FROM jm_accounts WHERE role='employee' ORDER BY email")->fetchAll() : [];
+    $employees = $owner ? $db->query("SELECT email,active FROM jm_accounts WHERE role='employee' AND staff_login IS NULL ORDER BY email")->fetchAll() : [];
     $directory = $db->query('SELECT * FROM jm_transport_directory ORDER BY country,name,address')->fetchAll();
     $factories = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'factory');
     $carriers = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'carrier');
@@ -220,6 +225,9 @@ try {
         JOIN jm_transport_directory c ON c.id=t.carrier_id JOIN jm_accounts a ON a.id=t.account_id';
     $filters = $owner ? [] : ['t.account_id = ?'];
     $params = $owner ? [] : [$actor];
+    if ($staff) {
+        $filters[] = "t.company='spk'";
+    }
     if (($_GET['unbilled'] ?? '') === '1') {
         $filters[] = "t.status='delivered' AND t.carrier_invoice=''";
     }
@@ -276,7 +284,7 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 </head>
 <body>
 <header><nav>
-<?php if ($owner): ?><a href="/index.html">← JURKO Manager</a><?php else: ?><strong>JURKO Manager</strong><?php endif ?>
+<?php if ($owner): ?><a href="/index.html">← JURKO Manager</a><?php elseif ($staff): ?><a href="/app/employee.php">← Mój panel</a><?php else: ?><strong>JURKO Manager</strong><?php endif ?>
 <form action="/auth/index.php?action=logout" method="post"><input type="hidden" name="csrf" value="<?=$csrf?>"><button>Wyloguj</button></form>
 </nav></header>
 <main>
@@ -328,7 +336,7 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="create">
 <input type="hidden" name="request" value="<?=e(bin2hex(random_bytes(16)))?>">
 <div class="grid">
-<label>Spółka<select name="company"><?php foreach (COMPANIES as $id => $name): ?><option value="<?=e($id)?>" <?=previous('company')===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
+<label>Spółka<select name="company"><?php foreach ($staff ? ['spk'=>COMPANIES['spk']] : COMPANIES as $id => $name): ?><option value="<?=e($id)?>" <?=previous('company')===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
 <label>Fabryka i punkt odbioru<select name="factory" required id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
 <label>Przewoźnik<select name="carrier" required id="order-carrier"><option value="">Wybierz przewoźnika</option><?php foreach ($carriers as $item): ?><option value="<?=e($item['id'])?>" <?=previous('carrier')===(string)$item['id']?'selected':''?>><?=e($item['name'])?></option><?php endforeach ?></select></label>
 <label>Numer zamówienia lub referencja odbioru<input name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
@@ -378,6 +386,12 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <?php endif ?>
 <button>Zapisz</button></form></details></td>
 <td>
+<?php
+$calendar = ['action'=>'TEMPLATE','text'=>'Transport '.$number.' · '.$order['factory'],
+    'dates'=>str_replace('-','',$order['pickup_date']).'/'.(new DateTimeImmutable($order['delivery_date']))->modify('+1 day')->format('Ymd'),
+    'location'=>$order['delivery_address'],'details'=>"Odbiór: ".$order['pickup_address']."\nPrzewoźnik: ".$order['carrier']];
+?>
+<a href="<?=e('https://calendar.google.com/calendar/render?'.http_build_query($calendar, '', '&', PHP_QUERY_RFC3986))?>" target="_blank" rel="noopener noreferrer">Dodaj do Kalendarza Google</a><br>
 <?php if ($order['carrier_email'] !== ''): ?><a href="<?=e('mailto:'.str_replace('%40','@',rawurlencode($order['carrier_email'])).'?subject='.rawurlencode('Zlecenie transportu '.$number).'&body='.rawurlencode($message))?>">E-mail</a><br><?php endif ?>
 <?php if ($order['carrier_phone'] !== ''): ?><a href="<?=e('https://wa.me/'.$order['carrier_phone'].'?text='.rawurlencode($message))?>" target="_blank" rel="noopener noreferrer">WhatsApp</a><?php endif ?>
 </td></tr>
