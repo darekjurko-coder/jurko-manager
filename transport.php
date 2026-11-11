@@ -65,10 +65,18 @@ function transportNumber(array $order): string
     return 'TR/'.$date->setTimezone(new DateTimeZone('Europe/Warsaw'))->format('Y/m').'/'.str_pad((string)$order['id'], 4, '0', STR_PAD_LEFT);
 }
 
+$embedded = ($_GET['panel'] ?? '') === '1';
+
 try {
     $config = jurkoAuthConfig();
     $user = jurkoCurrentUser($config);
     if (!$user) {
+        if ($embedded) {
+            http_response_code(401);
+            header("Content-Security-Policy: default-src 'none'; frame-ancestors 'self'; base-uri 'none'");
+            header('Content-Type: text/html; charset=utf-8');
+            exit('<p>Sesja wygasła. <a href="/auth/" target="_top">Zaloguj się ponownie</a>.</p>');
+        }
         header('Location: /auth/', true, 303);
         exit;
     }
@@ -199,7 +207,7 @@ try {
                     throw new InvalidArgumentException('Nieznana operacja.');
             }
             $_SESSION['transport_saved'] = true;
-            header('Location: /transport.php', true, 303);
+            header('Location: /transport.php'.($embedded ? '?panel=1' : ''), true, 303);
             exit;
         } catch (InvalidArgumentException $exception) {
             $error = $exception->getMessage();
@@ -244,7 +252,8 @@ try {
     exit('Nie można potwierdzić operacji. Odśwież kartotekę i sprawdź ostatni wpis.');
 }
 $nonce = base64_encode(random_bytes(18));
-header("Content-Security-Policy: default-src 'none'; style-src 'nonce-$nonce'; script-src 'nonce-$nonce'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+$frameAncestors = $embedded ? "'self'" : "'none'";
+header("Content-Security-Policy: default-src 'none'; style-src 'nonce-$nonce'; script-src 'nonce-$nonce'; form-action 'self'; frame-ancestors $frameAncestors; base-uri 'none'");
 $csrf = e($_SESSION['csrf']);
 $createValues = ($_POST['action'] ?? '') === 'create' ? $_POST : [];
 function previous(string $key): string
@@ -275,10 +284,12 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 </style>
 </head>
 <body>
+<?php if (!$embedded): ?>
 <header><nav>
 <?php if ($owner): ?><a href="/index.html">← JURKO Manager</a><?php else: ?><strong>JURKO Manager</strong><?php endif ?>
 <form action="/auth/index.php?action=logout" method="post"><input type="hidden" name="csrf" value="<?=$csrf?>"><button>Wyloguj</button></form>
 </nav></header>
+<?php endif ?>
 <main>
 <h1>Transport zewnętrzny</h1>
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
@@ -348,6 +359,7 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <section>
 <h2>Zlecenia transportowe</h2>
 <form method="get" class="actions">
+<?php if ($embedded): ?><input type="hidden" name="panel" value="1"><?php endif ?>
 <label>Szukaj zlecenia, zamówienia lub faktury<input name="q" value="<?=e($search)?>" maxlength="150"></label>
 <label class="check"><input type="checkbox" name="unbilled" value="1" <?=($_GET['unbilled']??'')==='1'?'checked':''?>> Dostarczone bez faktury</label>
 <button>Filtruj</button>
