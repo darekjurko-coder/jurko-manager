@@ -1,0 +1,1 @@
+ALTER TABLE jm_accounts ADD COLUMN staff_login VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NULL UNIQUE;

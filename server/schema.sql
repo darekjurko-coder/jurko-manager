@@ -262,3 +262,62 @@ CREATE TABLE IF NOT EXISTS jm_transport_orders (
  FOREIGN KEY (factory_id) REFERENCES jm_transport_directory(id),
  FOREIGN KEY (carrier_id) REFERENCES jm_transport_directory(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: staff/018_staff_login.sql
+ALTER TABLE jm_accounts ADD COLUMN staff_login VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NULL UNIQUE;
+
+-- Moduł: staff/019_login_attempts.sql
+CREATE TABLE jm_staff_login_attempts (
+ bucket CHAR(64) CHARACTER SET ascii PRIMARY KEY,
+ hits INT UNSIGNED NOT NULL,
+ expires_at DATETIME NOT NULL,
+ INDEX (expires_at)
+) ENGINE=InnoDB;
+
+-- Moduł: staff/020_cash.sql
+CREATE TABLE jm_staff_cash (
+ employee_id BIGINT UNSIGNED NOT NULL,
+ cash_date DATE NOT NULL,
+ amount DECIMAL(15,2) NOT NULL,
+ note VARCHAR(300) NOT NULL,
+ PRIMARY KEY (employee_id,cash_date),
+ FOREIGN KEY (employee_id) REFERENCES jm_employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: staff/021_sales.sql
+CREATE TABLE jm_staff_sales (
+ employee_id BIGINT UNSIGNED NOT NULL,
+ period DATE NOT NULL,
+ turnover DECIMAL(15,2) NULL,
+ projects INT UNSIGNED NULL,
+ PRIMARY KEY (employee_id,period),
+ FOREIGN KEY (employee_id) REFERENCES jm_employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: staff/022_receivables.sql
+CREATE TABLE jm_staff_receivables (
+ employee_id BIGINT UNSIGNED NOT NULL,
+ document VARCHAR(100) NOT NULL,
+ customer VARCHAR(150) NOT NULL,
+ balance DECIMAL(15,2) NOT NULL,
+ PRIMARY KEY (employee_id,document),
+ FOREIGN KEY (employee_id) REFERENCES jm_employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: staff/023_task_rules.sql
+CREATE TABLE jm_staff_task_rules (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ employee_id BIGINT UNSIGNED NOT NULL,
+ title VARCHAR(200) NOT NULL,
+ month_day TINYINT UNSIGNED NOT NULL,
+ UNIQUE (employee_id,title,month_day),
+ FOREIGN KEY (employee_id) REFERENCES jm_employees(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: staff/024_task_checks.sql
+CREATE TABLE jm_staff_task_checks (
+ rule_id BIGINT UNSIGNED NOT NULL,
+ period DATE NOT NULL,
+ PRIMARY KEY (rule_id,period),
+ FOREIGN KEY (rule_id) REFERENCES jm_staff_task_rules(id) ON DELETE CASCADE
+) ENGINE=InnoDB;

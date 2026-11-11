@@ -38,7 +38,7 @@ try {
                 throw new DomainException('Konto nie zostało zatwierdzone.');
             }
             require_once __DIR__.'/../server/database.php';
-            $query = jurkoDatabase()->prepare("SELECT email FROM jm_accounts WHERE email=? AND active=TRUE AND role='employee'");
+            $query = jurkoDatabase()->prepare("SELECT email FROM jm_accounts WHERE email=? AND active=TRUE AND role='employee' AND staff_login IS NULL");
             $query->execute([$email]);
             if (!$query->fetchColumn()) {
                 throw new DomainException('Konto nie zostało zatwierdzone.');
@@ -101,6 +101,7 @@ a:focus-visible{outline:3px solid #9be0b7;outline-offset:5px}
 <h1>Logowanie do Managera</h1>
 <p>Dostęp wyłącznie dla zatwierdzonych kont.</p>
 <a href="?action=login"><span class="google" aria-hidden="true">G</span>Zaloguj przez Google</a>
+<a href="/app/employee.php">Logowanie pracownika spółki komandytowej</a>
 <p class="note">Google może poprosić o potwierdzenie na telefonie. Hasło podajesz wyłącznie Google.</p>
 </main>
 </body>

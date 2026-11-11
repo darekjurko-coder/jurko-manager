@@ -2,7 +2,7 @@ DirectoryIndex index.php
 Options -Indexes
 RewriteEngine On
 RewriteRule ^index\.html$ portal.php [END]
-RewriteRule ^pracownik\.html$ /index.html#pracownicy [R=303,NE,L]
+RewriteRule ^pracownik\.html$ /app/employee.php [R=303,L]
 <FilesMatch "^(composer\.(json|lock)|AGENTS\.md|.*\.sql)$">
 Require all denied
 </FilesMatch>

@@ -15,5 +15,12 @@
   "sales/014_commissions.sql",
   "sales/015_original_report.sql",
   "transport/016_directory.sql",
-  "transport/017_orders.sql"
+  "transport/017_orders.sql",
+  "staff/018_staff_login.sql",
+  "staff/019_login_attempts.sql",
+  "staff/020_cash.sql",
+  "staff/021_sales.sql",
+  "staff/022_receivables.sql",
+  "staff/023_task_rules.sql",
+  "staff/024_task_checks.sql"
 ]
