@@ -24,11 +24,12 @@ jobs:
           composer install --no-dev --no-interaction --prefer-dist
           composer audit
           find server auth app tests scripts -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l transport.php
           php tests/auth-policy.php
           php tests/portal-policy.php
           sh -n scripts/deploy-ovh.sh
           python3 scripts/build-schema.py --check
-          tar -czf /tmp/jurko-release.tar.gz index.php index.html pracownik.html portal.php portal-api.php sales-api.php sales.js portal-client.js owner-panel.js staff.js .htaccess .ovhconfig server auth app vendor composer.json composer.lock scripts/backup-db.php
+          tar -czf /tmp/jurko-release.tar.gz index.php index.html pracownik.html portal.php transport.php portal-api.php sales-api.php sales.js portal-client.js owner-panel.js staff.js .htaccess .ovhconfig server auth app vendor composer.json composer.lock scripts/backup-db.php
       - name: Przygotuj prywatną konfigurację Google
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}

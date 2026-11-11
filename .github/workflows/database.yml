@@ -28,6 +28,7 @@ jobs:
           php -l portal.php
           php -l portal-api.php
           php -l sales-api.php
+          php -l transport.php
           node --check owner-panel.js
           node --check portal-client.js
           node --check staff.js

@@ -13,5 +13,7 @@
   "core/012_module_revisions.sql",
   "core/013_write_requests.sql",
   "sales/014_commissions.sql",
-  "sales/015_original_report.sql"
+  "sales/015_original_report.sql",
+  "transport/016_directory.sql",
+  "transport/017_orders.sql"
 ]

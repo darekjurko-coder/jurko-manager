@@ -31,7 +31,22 @@ try {
         // Biblioteka Google weryfikuje podpis i ważność, polityka sprawdza odbiorcę, nonce i listę kont.
         $claims = $client->verifyIdToken($token['id_token']);
         if (!is_array($claims)) { throw new RuntimeException('Niepoprawny token.'); }
-        if (!isset($config['accounts'][$claims['sub'] ?? ''])) {
+        $email = is_string($claims['email'] ?? null) ? strtolower($claims['email']) : '';
+        if (!isset($config['accounts'][$claims['sub'] ?? '']) && $email !== ($config['owner_email'] ?? null)) {
+            $domain = substr(strrchr($email, '@') ?: '', 1);
+            if ($domain === '' || ($domain !== 'gmail.com' && ($claims['hd'] ?? null) !== $domain)) {
+                throw new DomainException('Konto nie zostało zatwierdzone.');
+            }
+            require_once __DIR__.'/../server/database.php';
+            $query = jurkoDatabase()->prepare("SELECT email FROM jm_accounts WHERE email=? AND active=TRUE AND role='employee'");
+            $query->execute([$email]);
+            if (!$query->fetchColumn()) {
+                throw new DomainException('Konto nie zostało zatwierdzone.');
+            }
+            $subject = $claims['sub'] ?? '';
+            $user = jurkoAuthorizeGoogle($claims, [$subject=>['role'=>'employee']], $pending['nonce'], $config['client_id'], time());
+            $user['transport_email'] = $email;
+        } elseif (!isset($config['accounts'][$claims['sub'] ?? ''])) {
             $user = jurkoOwnerCandidate($claims, $config, $pending['nonce'], time());
             jurkoBindOwner($user, $config);
         } else {
@@ -41,7 +56,7 @@ try {
         $_SESSION['user'] = $user;
         $_SESSION['signed_at'] = $_SESSION['last_seen'] = time();
         $_SESSION['csrf'] = bin2hex(random_bytes(32));
-        header('Location: /app/', true, 303); exit;
+        header('Location: ' . ($user['role'] === 'employee' ? '/transport.php' : '/app/'), true, 303); exit;
     }
     if ($action === 'logout') {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !is_string($_POST['csrf'] ?? null)

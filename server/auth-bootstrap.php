@@ -42,6 +42,10 @@ function jurkoCurrentUser(array $config): ?array
     if (!is_array($u) || time() - ($_SESSION['last_seen'] ?? 0) > 1800
         || time() - ($_SESSION['signed_at'] ?? 0) > 28800) { unset($_SESSION['user']); return null; }
     $role = $config['accounts'][$u['sub']]['role'] ?? null;
+    if ($role === null && ($u['role'] ?? null) === 'employee' && is_string($u['transport_email'] ?? null)) {
+        $_SESSION['last_seen'] = time();
+        return ['sub'=>$u['sub'], 'role'=>'employee', 'transport_email'=>$u['transport_email']];
+    }
     if (!in_array($role, ['owner','manager','employee'], true)) { unset($_SESSION['user']); return null; }
     $_SESSION['last_seen'] = time();
     return ['sub'=>$u['sub'], 'role'=>$role];

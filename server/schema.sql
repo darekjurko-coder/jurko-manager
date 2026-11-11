@@ -222,3 +222,43 @@ CREATE TABLE IF NOT EXISTS jm_original_report_state (
  report_json JSON NOT NULL,
  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: transport/016_directory.sql
+CREATE TABLE IF NOT EXISTS jm_transport_directory (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ kind ENUM('factory','carrier') NOT NULL,
+ name VARCHAR(150) NOT NULL,
+ country VARCHAR(20) NOT NULL DEFAULT '',
+ address VARCHAR(300) NOT NULL DEFAULT '',
+ email VARCHAR(254) NOT NULL DEFAULT '',
+ phone VARCHAR(16) NOT NULL DEFAULT '',
+ UNIQUE KEY transport_contact (kind,name,country,address)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: transport/017_orders.sql
+CREATE TABLE IF NOT EXISTS jm_transport_orders (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ account_id BIGINT UNSIGNED NOT NULL,
+ factory_id BIGINT UNSIGNED NOT NULL,
+ carrier_id BIGINT UNSIGNED NOT NULL,
+ company ENUM('zoo','spk') NOT NULL,
+ reference VARCHAR(150) NOT NULL,
+ delivery_address VARCHAR(300) NOT NULL,
+ pickup_date DATE NOT NULL,
+ delivery_date DATE NOT NULL,
+ pallets INT UNSIGNED NOT NULL,
+ weight_kg DECIMAL(10,2) NOT NULL,
+ agreed_net DECIMAL(12,2) NULL,
+ currency ENUM('PLN','EUR') NOT NULL,
+ notes TEXT NOT NULL,
+ goods_invoice VARCHAR(150) NOT NULL DEFAULT '',
+ carrier_invoice VARCHAR(150) NOT NULL DEFAULT '',
+ actual_net DECIMAL(12,2) NULL,
+ invoice_pdf MEDIUMTEXT CHARACTER SET ascii NULL,
+ status ENUM('draft','sent','delivered') NOT NULL DEFAULT 'draft',
+ request_id CHAR(32) NOT NULL UNIQUE,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ FOREIGN KEY (account_id) REFERENCES jm_accounts(id),
+ FOREIGN KEY (factory_id) REFERENCES jm_transport_directory(id),
+ FOREIGN KEY (carrier_id) REFERENCES jm_transport_directory(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
