@@ -214,3 +214,11 @@ CREATE TABLE IF NOT EXISTS jm_sales_costs (
  CHECK(amount_net>=0),
  CHECK(percent_bp IS NULL OR percent_bp<=10000)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: sales/015_original_report.sql
+CREATE TABLE IF NOT EXISTS jm_original_report_state (
+ id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+ revision BIGINT UNSIGNED NOT NULL,
+ report_json JSON NOT NULL,
+ updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

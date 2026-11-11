@@ -12,5 +12,6 @@
   "employees/011_employee_identity.sql",
   "core/012_module_revisions.sql",
   "core/013_write_requests.sql",
-  "sales/014_commissions.sql"
+  "sales/014_commissions.sql",
+  "sales/015_original_report.sql"
 ]
