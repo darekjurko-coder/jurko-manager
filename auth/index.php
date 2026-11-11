@@ -56,5 +56,36 @@ try {
 } catch (Throwable $e) {
     http_response_code(503); exit('Logowanie Google nie jest jeszcze dostępne. Wymagana konfiguracja na serwerze.');
 }
-?><!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Logowanie — JURKO MANAGER</title><h1>JURKO MANAGER</h1><p>Dostęp wyłącznie dla zatwierdzonych kont.</p><a href="?action=login">Zaloguj przez Google</a><p>Google może poprosić o potwierdzenie na telefonie. Hasło podajesz wyłącznie Google.</p></html>
-
+?><!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#101513">
+<title>Logowanie — JURKO MANAGER</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;min-height:100svh;display:grid;place-items:center;padding:24px;color:#f3f5f1;font:16px/1.5 Inter,system-ui,sans-serif;background:#101513;background-image:radial-gradient(ellipse at 50% 10%,#214236 0%,transparent 58%),repeating-linear-gradient(155deg,transparent 0 22px,#c8d3ca09 23px,transparent 25px 69px),linear-gradient(135deg,#202623,#0d100f)}
+main{width:min(100%,440px);padding:clamp(24px,6vw,48px);background:#171d1a;border:1px solid #41534a;border-radius:22px;box-shadow:0 30px 90px #0008;text-align:center;animation:enter .45s ease-out}
+.brand{font-weight:850;letter-spacing:.26em;color:#a2e0bd;text-shadow:0 0 24px #60c19070}
+h1{margin:8px 0 12px;font-size:clamp(28px,6vw,42px);line-height:1.05;letter-spacing:-.04em}
+p{margin:0;color:#bac7bf}
+a{display:flex;align-items:center;justify-content:center;gap:12px;min-height:50px;margin:26px 0 16px;padding:10px 16px;border-radius:10px;background:#f1f7f2;color:#14251c;text-decoration:none;font-weight:700}
+a:hover{background:#d5f0df}
+a:focus-visible{outline:3px solid #9be0b7;outline-offset:5px}
+.google{color:#1967d2;font-size:22px;font-weight:800}
+.note{font-size:13px}
+@keyframes enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){main{animation:none}}
+</style>
+</head>
+<body>
+<main>
+<div class="brand">JURKO</div>
+<h1>Logowanie do Managera</h1>
+<p>Dostęp wyłącznie dla zatwierdzonych kont.</p>
+<a href="?action=login"><span class="google" aria-hidden="true">G</span>Zaloguj przez Google</a>
+<p class="note">Google może poprosić o potwierdzenie na telefonie. Hasło podajesz wyłącznie Google.</p>
+</main>
+</body>
+</html>
