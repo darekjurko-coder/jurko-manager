@@ -17,7 +17,7 @@ try{
     $state=jurkoPortalState($db,$month);
     $state['csrf']=$_SESSION['csrf'];
     $nonce=base64_encode(random_bytes(24));
-    header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
+    header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; form-action 'self'; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'");
     header('Content-Type: text/html; charset=utf-8');
     $boot='<script nonce="'.htmlspecialchars($nonce,ENT_QUOTES).'">window.JurkoInitial='.json_encode($state,JSON_THROW_ON_ERROR|JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT).';</script>';
     $html=file_get_contents(__DIR__.'/server/owner-panel.html');

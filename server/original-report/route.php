@@ -87,7 +87,7 @@ function jurkoOriginalReport(PDO $db): void
     }
     $nonce = base64_encode(random_bytes(24));
     header('Content-Type: text/html; charset=utf-8');
-    header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce'; worker-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    header("Content-Security-Policy: default-src 'none'; script-src 'self' 'nonce-$nonce'; worker-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'self'; form-action 'self'");
     $html = file_get_contents($dir.'/app.html');
     $csrf = json_encode($_SESSION['csrf'], JSON_THROW_ON_ERROR | JSON_HEX_TAG);
     $html = str_replace('__REPORT_CSRF__', $csrf, $html);
