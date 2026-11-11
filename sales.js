@@ -50,5 +50,5 @@ window.JurkoSales=(()=>{
     };
   }
   function mount(employee){const root=document.getElementById('sales-root');if(!root)return;const ctx={employee,month:months.get(employee.id)||defaultMonth(),serial:++serial};context=ctx;root.innerHTML='<p>Wczytuję raport z MySQL…</p>';load(ctx).catch(e=>{if(active(ctx)){root.innerHTML='<div id="sales-message" role="status"></div>';message(ctx,e.message);}});}
-  return {mount};
+  return {mount, selectMonth:(id,month)=>months.set(id,month)};
 })();
