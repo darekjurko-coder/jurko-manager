@@ -56,6 +56,7 @@ try {
 } catch (Throwable $e) {
     http_response_code(503); exit('Logowanie Google nie jest jeszcze dostępne. Wymagana konfiguracja na serwerze.');
 }
+header("Content-Security-Policy: default-src 'none'; style-src 'self' 'sha256-1rs6G4shNjn845LuGUaRyr9k9j3m5IDk4LWh9R5xpgQ='; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
 ?><!doctype html>
 <html lang="pl">
 <head>
