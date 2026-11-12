@@ -157,6 +157,7 @@ try {
                     $query->execute([$kind,$name,$country,$address,$email,$phone,$email,$phone]);
                     break;
                 case 'create':
+                    $editId = numberField('edit_id', 12, false, true);
                     $selectedPoint = numberField('factory', 10, false, true);
                     $carrier = numberField('carrier', 10, false, true);
                     $address = field('pickup_address', 300);
@@ -194,19 +195,32 @@ try {
                         numberField('weight',8),numberField('agreed',10),choice('currency',['PLN','EUR']),field('notes',6000),$request];
                     $db->beginTransaction();
                     try {
+                        if ($editId !== null) {
+                            $query = $db->prepare('SELECT id FROM jm_transport_orders WHERE id=?'.($owner ? '' : ' AND account_id=?').' FOR UPDATE');
+                            $query->execute($owner ? [$editId] : [$editId,$actor]);
+                            if (!$query->fetchColumn()) {
+                                throw new InvalidArgumentException('Zlecenie jest niedostępne.');
+                            }
+                        }
                         $factory = null;
                         if ($name !== '' || $address !== '') {
                             $query = $db->prepare("INSERT INTO jm_transport_directory (kind,name,country,address) VALUES ('factory',?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
                             $query->execute([$name,$country,$address]);
                             $factory = $db->lastInsertId();
                         }
-                        $query = $db->prepare('INSERT INTO jm_transport_orders (account_id,factory_id,carrier_id,company,reference,delivery_address,pickup_date,delivery_date,pallets,weight_kg,agreed_net,currency,notes,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id');
-                        $query->execute([$actor,$factory,$carrier,...$values]);
-                        $query = $db->prepare('SELECT id FROM jm_transport_orders WHERE account_id=? AND request_id=?');
-                        $query->execute([$actor,$request]);
-                        $savedOrder = $query->fetchColumn();
+                        if ($editId !== null) {
+                            $query = $db->prepare('UPDATE jm_transport_orders SET factory_id=?,carrier_id=?,company=?,reference=?,delivery_address=?,pickup_date=?,delivery_date=?,pallets=?,weight_kg=?,agreed_net=?,currency=?,notes=? WHERE id=?');
+                            $query->execute([$factory,$carrier,...array_slice($values,0,-1),$editId]);
+                            $savedOrder = $editId;
+                        } else {
+                            $query = $db->prepare('INSERT INTO jm_transport_orders (account_id,factory_id,carrier_id,company,reference,delivery_address,pickup_date,delivery_date,pallets,weight_kg,agreed_net,currency,notes,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id');
+                            $query->execute([$actor,$factory,$carrier,...$values]);
+                            $query = $db->prepare('SELECT id FROM jm_transport_orders WHERE account_id=? AND request_id=?');
+                            $query->execute([$actor,$request]);
+                            $savedOrder = $query->fetchColumn();
+                        }
                         $db->commit();
-                        $redirect .= ($embedded ? '&' : '?').'history=1&order='.$savedOrder.'#order-'.$savedOrder;
+                        $redirect .= ($embedded ? '&' : '?').($editId !== null ? 'edit='.$savedOrder.'#new-order' : 'history=1&order='.$savedOrder.'#order-'.$savedOrder);
                     } catch (Throwable $exception) {
                         $db->rollBack();
                         throw $exception;
@@ -262,7 +276,7 @@ try {
     $unloads = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'unload');
     $openOrder = is_string($_GET['order'] ?? null) && ctype_digit($_GET['order']) ? $_GET['order'] : '';
     $carriers = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'carrier');
-    $sql = 'SELECT t.id,t.company,t.reference,t.delivery_address,t.pickup_date,t.delivery_date,
+    $sql = 'SELECT t.id,t.factory_id,t.carrier_id,f.country AS pickup_country,t.company,t.reference,t.delivery_address,t.pickup_date,t.delivery_date,
         t.pallets,t.weight_kg,t.agreed_net,t.actual_net,t.currency,t.notes,t.status,t.created_at,
         t.goods_invoice,t.carrier_invoice,t.invoice_pdf IS NOT NULL AS has_pdf,
         f.name AS factory, f.address AS pickup_address, c.name AS carrier,
@@ -286,6 +300,13 @@ try {
     $query = $db->prepare($sql.($filters ? ' WHERE '.implode(' AND ',$filters) : '').' ORDER BY t.id DESC');
     $query->execute($params);
     $orders = $query->fetchAll();
+    $editing = null;
+    $edit = $_GET['edit'] ?? '';
+    if (is_string($edit) && preg_match('/^[1-9][0-9]{0,11}$/D', $edit)) {
+        $query = $db->prepare($sql.' WHERE t.id=?'.($owner ? '' : ' AND t.account_id=?'));
+        $query->execute($owner ? [$edit] : [$edit,$actor]);
+        $editing = $query->fetch() ?: null;
+    }
     $usage = $db->query("SELECT factory_id, carrier_id, COUNT(*) AS uses FROM jm_transport_orders WHERE status<>'draft' GROUP BY factory_id, carrier_id")->fetchAll();
 } catch (DomainException $exception) {
     http_response_code(403);
@@ -299,6 +320,17 @@ $frameAncestors = $embedded ? "'self'" : "'none'";
 header("Content-Security-Policy: default-src 'none'; style-src 'nonce-$nonce'; script-src 'nonce-$nonce' 'self'; worker-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors $frameAncestors; base-uri 'none'");
 $csrf = e($_SESSION['csrf']);
 $createValues = ($_POST['action'] ?? '') === 'create' ? $_POST : [];
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && $editing) {
+    foreach (['factory'=>'factory_id','carrier'=>'carrier_id','pickup_brand'=>'factory','pickup_country'=>'pickup_country',
+        'pickup_address'=>'pickup_address','delivery_address'=>'delivery_address','reference'=>'reference',
+        'pickup'=>'pickup_date','delivery'=>'delivery_date','weight'=>'weight_kg','pallets'=>'pallets',
+        'company'=>'company','agreed'=>'agreed_net','currency'=>'currency','notes'=>'notes'] as $key=>$column) {
+        $createValues[$key] = (string)$editing[$column];
+    }
+}
+$editFormId = $editing['id'] ?? ($createValues['edit_id'] ?? '');
+$transportUrl = '/transport.php'.($embedded ? '?panel=1' : '');
+$transportQuery = $transportUrl.($embedded ? '&' : '?');
 function previous(string $key): string
 {
     global $createValues;
@@ -353,7 +385,7 @@ main{max-width:1600px}
 #factory-entry input,#factory-entry select{width:100%}
 #factory-entry form button{white-space:normal;text-align:center}
 #factory-photo-status:empty{display:none}
-p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .table{margin-top:7px}
+p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.transport-history .table{margin-top:7px}
 @media(max-width:600px){input,select,textarea{font-size:16px}button,.button{min-height:32px}}
 .carrier-directory{margin-top:8px}.carrier-directory form,.shipment-step details{display:grid;gap:5px}
 .carrier-directory input{width:100%}.carrier-names{margin:6px 0 0;padding-left:18px}
@@ -434,14 +466,16 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
 <section id="new-order">
-<div class="shipment-header"><h2>Nowa przesyłka</h2><button type="submit" form="shipment-form">Zapisz zlecenie</button></div>
+<div class="shipment-header"><h2><?=$editFormId !== '' ? 'Edycja zlecenia'.($editing ? ' · '.e(transportNumber($editing)) : '') : 'Nowa przesyłka'?></h2>
+<?php if ($editFormId !== ''): ?><a href="<?=e($transportUrl)?>">Nowa przesyłka</a><?php endif ?><button type="submit" form="shipment-form">Zapisz zlecenie</button></div>
 
 <form method="post" id="shipment-form">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="create">
+<input type="hidden" name="edit_id" value="<?=e(is_scalar($editFormId) ? (string)$editFormId : '')?>">
 <input type="hidden" name="request" value="<?=e(bin2hex(random_bytes(16)))?>">
 <div class="pickup-block shipment-step">
 <div class="shipment-header"><h3 id="pickup-title">Punkt odbioru</h3>
-<label>Adres dostawy<input id="delivery-address" name="delivery_address" maxlength="300" value="<?=previous('delivery_address') ?: 'JURKO, Al. Jerozolimskie 229, 02-495 Warszawa'?>"></label>
+<label>Adres dostawy<input id="delivery-address" name="delivery_address" maxlength="300" value="<?=($editFormId !== '' || array_key_exists('delivery_address',$createValues)) ? previous('delivery_address') : 'JURKO, Al. Jerozolimskie 229, 02-495 Warszawa'?>"></label>
 </div>
 <input type="hidden" id="pickup-brand" name="pickup_brand" value="<?=previous('pickup_brand')?>">
 <input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
@@ -496,19 +530,6 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <div class="actions"><a class="button" id="carrier-mail" aria-disabled="true">E-mail</a><a class="button" id="carrier-whatsapp" aria-disabled="true" target="_blank" rel="noopener noreferrer">WhatsApp</a><a class="button" id="carrier-sms" aria-disabled="true">SMS</a></div>
 <p id="carrier-channel-status" class="muted" role="status"></p>
 </section>
-<section>
-<h2>Dane kierowcy do fabryki</h2>
-<div class="grid">
-<label>Imię i nazwisko<input id="driver-name" maxlength="100"></label>
-<label>Telefon<input id="driver-phone" type="tel" maxlength="32"></label>
-<label>Rejestracja pojazdu<input id="driver-plate" maxlength="24"></label>
-
-</div>
-<p><label>Treść wiadomości<textarea id="factory-preview" rows="5" readonly></textarea></label></p>
-<div id="factory-emails" class="factory-recipients"></div>
-<label>Dodatkowy e-mail do fabryki<input id="factory-email" type="email" multiple maxlength="254"></label>
-<a id="factory-mail" hidden>Otwórz e-mail do fabryki</a>
-</section>
 <section id="unload-directory">
 <h2>Punkt rozładunku</h2>
 <div class="directory-buttons">
@@ -526,6 +547,20 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 </details>
 <?php endif ?>
 </section>
+<section>
+<h2>Dane kierowcy do fabryki</h2>
+<div class="grid">
+<label>Imię i nazwisko<input id="driver-name" maxlength="100"></label>
+<label>Telefon<input id="driver-phone" type="tel" maxlength="32"></label>
+<label>Rejestracja pojazdu<input id="driver-plate" maxlength="24"></label>
+
+</div>
+<p><label>Treść wiadomości<textarea id="factory-preview" rows="5" readonly></textarea></label></p>
+<div id="factory-emails" class="factory-recipients"></div>
+<label>Dodatkowy e-mail do fabryki<input id="factory-email" type="email" multiple maxlength="254"></label>
+<a id="factory-mail" hidden>Otwórz e-mail do fabryki</a>
+</section>
+
 </aside>
 <section class="transport-history" id="transport-history" <?=($search === '' && ($_GET['unbilled'] ?? '') !== '1' && !isset($_GET['history'])) ? 'hidden' : ''?>>
 <h2>Wcześniejsze zlecenia</h2>
@@ -548,7 +583,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
         "\n\nProszę o potwierdzenie zlecenia i podanie numeru $number na fakturze.";
 ?>
 <tr id="order-<?=e($order['id'])?>">
-<td><a href="<?=e('/transport.php?'.($embedded ? 'panel=1&' : '').'history=1&order='.$order['id'].'#order-'.$order['id'])?>"><?=e($number)?></a><br><?=e($order['reference'])?><br><small><?=e(COMPANIES[$order['company']])?><br><?=e($order['author'])?></small></td>
+<td><a class="button" href="<?=e($transportQuery.'edit='.$order['id'].'#new-order')?>">Otwórz i edytuj</a><br><a href="<?=e('/transport.php?'.($embedded ? 'panel=1&' : '').'history=1&order='.$order['id'].'#order-'.$order['id'])?>"><?=e($number)?></a><br><?=e($order['reference'])?><br><small><?=e(COMPANIES[$order['company']])?><br><?=e($order['author'])?></small></td>
 <td><?=e($order['factory'])?><br><small><?=e($order['pickup_address'])?></small><br><?=e($order['carrier'])?></td>
 <td><?=e($order['pickup_date'])?><br><?=e($order['delivery_date'])?><br><small><?=e($order['delivery_address'])?><br><?=e($order['pallets'] === null ? '—' : $order['pallets'].' pal.')?> · <?=e($order['weight_kg'] === null ? '—' : $order['weight_kg'].' kg')?></small><?php if ($order['notes'] !== ''): ?><details><summary>Uwagi</summary><?=nl2br(e($order['notes']))?></details><?php endif ?></td>
 <td>Uzgodniony <?=e($order['agreed_net'] === null ? '—' : $order['agreed_net'].' '.$order['currency'])?><br>Rozliczony <?=e($order['actual_net'] === null ? '—' : $order['actual_net'].' '.$order['currency'])?></td>
@@ -792,9 +827,11 @@ const orderForm = document.querySelector('#new-order form');
 const orderHistory = document.getElementById('transport-history');
 const historyLink = document.getElementById('open-history');
 historyLink.setAttribute('aria-expanded', String(!orderHistory.hidden));
-historyLink.addEventListener('click', () => {
-    orderHistory.hidden = false;
-    historyLink.setAttribute('aria-expanded','true');
+historyLink.addEventListener('click', event => {
+    event.preventDefault();
+    orderHistory.hidden = !orderHistory.hidden;
+    historyLink.setAttribute('aria-expanded', String(!orderHistory.hidden));
+    if (!orderHistory.hidden) orderHistory.scrollIntoView({block:'nearest'});
 });
 const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','name','address','email','phone'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 const selectedCarrier = document.getElementById('selected-carrier');
