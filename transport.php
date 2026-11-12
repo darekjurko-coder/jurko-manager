@@ -413,6 +413,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .shipment-photo{margin-top:8px;min-height:70px}#unload-directory form{display:grid;gap:5px;margin-top:6px}
 @media(max-width:600px){.shipment-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .employee-access{margin-top:8px}.employee-access .actions{gap:5px}
+#factory-entry-handle{cursor:move;touch-action:none;user-select:none}#factory-entry-handle button{cursor:pointer}
 </style>
 </head>
 <body>
@@ -435,7 +436,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <p id="factory-feedback" class="muted" role="status"></p>
 <?php if ($owner): ?>
 <dialog id="factory-entry" aria-labelledby="factory-entry-title">
-<div class="factory-heading"><h2 id="factory-entry-title">Dodaj fabrykę</h2><button type="button" id="close-factory" aria-label="Zamknij">×</button></div>
+<div class="factory-heading" id="factory-entry-handle"><h2 id="factory-entry-title">Dodaj fabrykę</h2><button type="button" id="close-factory" aria-label="Zamknij">×</button></div>
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="factory">
 <input type="hidden" name="directory_id" id="directory-point-id">
@@ -733,6 +734,24 @@ function openFactoryEntry(point = null) {
     document.getElementById('directory-factory').focus();
 }
 if (country) {
+    const entry = document.getElementById('factory-entry');
+    const handle = document.getElementById('factory-entry-handle');
+    let drag;
+    handle.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || drag || event.target.closest('button')) return;
+        const rect = entry.getBoundingClientRect();
+        drag = {id:event.pointerId,x:event.clientX-rect.left,y:event.clientY-rect.top};
+        handle.setPointerCapture(event.pointerId);
+    });
+    handle.addEventListener('pointermove', event => {
+        if (drag?.id !== event.pointerId) return;
+        const rect = entry.getBoundingClientRect();
+        const x = Math.max(0,Math.min(innerWidth-rect.width,event.clientX-drag.x));
+        const y = Math.max(0,Math.min(innerHeight-rect.height,event.clientY-drag.y));
+        Object.assign(entry.style,{margin:'0',inset:'auto',left:x+'px',top:y+'px'});
+    });
+    handle.addEventListener('lostpointercapture', () => { drag = null; });
+    entry.addEventListener('close', () => { entry.removeAttribute('style'); });
     document.getElementById('add-factory').addEventListener('click', () => openFactoryEntry());
     document.getElementById('close-factory').addEventListener('click', () => document.getElementById('factory-entry').close());
 }
