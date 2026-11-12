@@ -338,6 +338,9 @@ main{max-width:1600px}
 #factory-photo-status:empty{display:none}
 p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .table{margin-top:7px}
 @media(max-width:600px){input,select,textarea{font-size:16px}button,.button{min-height:32px}}
+.carrier-directory{margin-top:8px}.carrier-directory form,.shipment-step details{display:grid;gap:5px}
+.carrier-directory input{width:100%}.carrier-names{margin:6px 0 0;padding-left:18px}
+[id$="-photo-status"]:empty,#pickup-message:empty{display:none}
 </style>
 </head>
 <body>
@@ -376,13 +379,34 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 </details>
 <?php endif ?>
 </aside>
+<section class="carrier-directory">
+<h2>Przewoźnik</h2>
+<?php if ($owner): ?>
+<details><summary>Dodaj firmę transportową</summary>
+<form method="post">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="carrier">
+<label>Nazwa firmy<input id="carrier-name" name="name" maxlength="150" required></label>
+<label>E-mail<input id="carrier-email" name="email" type="email" maxlength="254"></label>
+<label>Telefon do SMS / WhatsApp<input id="carrier-phone" name="phone" type="tel" maxlength="30" placeholder="+48"></label>
+<label>Zdjęcie z danymi<input id="carrier-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+<label>Wklej zdjęcie lub tekst<textarea id="carrier-photo-text" rows="3" maxlength="12000"></textarea></label>
+<button type="button" id="fill-carrier-fields">Uzupełnij pola z tekstu</button>
+<p id="carrier-photo-status" class="muted" role="status"></p>
+<button>Zapisz przewoźnika</button>
+</form>
+</details>
+<?php endif ?>
+<?php if ($carriers): ?>
+<ul class="carrier-names"><?php foreach ($carriers as $item): ?><li><?=e($item['name'])?></li><?php endforeach ?></ul>
+<?php endif ?>
+</section>
 </div>
 <div class="transport-content">
 <h1>Transport zewnętrzny</h1>
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
 <section id="new-order">
-<h2>Nowa przesyłka</h2>
+<h2>Nowa przesyłka – fabryka</h2>
 
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="create">
@@ -393,20 +417,21 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
 <label>Zapisany punkt odbioru<select name="factory" id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
 <label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>" required></label>
-<details><summary>Wklej dane fabryki lub dyspozycję</summary>
-<label>Tekst od fabryki<textarea id="pickup-paste" rows="3" maxlength="6000" placeholder="Nazwa fabryki, adres i numer dyspozycji"></textarea></label>
-<div><button type="button" id="split-pickup">Rozdziel adres i numer</button></div>
-<p id="pickup-message" class="muted" role="status"></p>
-</details>
 </div>
 <div class="pickup-block shipment-step">
-<h3>Dyspozycja i parametry odbioru</h3>
+<h3>Dyspozycja</h3>
 <label>Numer dyspozycji do odbioru<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
 <div class="grid">
 <label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>" required></label>
 <label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>" required></label>
 <label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>" required></label>
 </div>
+<details><summary>Wklej zdjęcie lub tekst dyspozycji</summary>
+<label>Zdjęcie z danymi<input id="pickup-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+<label>Wklej zdjęcie lub tekst<textarea id="pickup-paste" rows="3" maxlength="12000"></textarea></label>
+<button type="button" id="split-pickup">Uzupełnij pola z tekstu</button>
+<p id="pickup-message" class="muted" role="status"></p>
+</details>
 </div>
 <div class="pickup-block shipment-step">
 <h3>Miejsce dostarczenia</h3>
@@ -438,24 +463,6 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <button name="access" value="enable">Włącz dostęp</button><button name="access" value="disable">Wyłącz dostęp</button>
 </form>
 <?php if ($employees): ?><ul><?php foreach ($employees as $employee): ?><li><?=e($employee['email'])?> · <?=$employee['active']?'Aktywny':'Wyłączony'?></li><?php endforeach ?></ul><?php endif ?>
-</details>
-<details <?=(!$factories || !$carriers) ? 'open' : ''?>>
-<summary>Kartoteka przewoźników</summary>
-<div class="grid">
-<form method="post">
-<h2>Przewoźnik</h2>
-<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="carrier">
-<label>Nazwa firmy<input name="name" maxlength="150" required></label>
-<label>E-mail<input name="email" type="email" maxlength="254"></label>
-<label>WhatsApp z kodem kraju<input name="phone" type="tel" maxlength="30" placeholder="+48"></label>
-<p><button>Zapisz przewoźnika</button></p>
-</form>
-</div>
-<div class="table"><table><thead><tr><th>Rodzaj</th><th>Nazwa</th><th>Adres lub kontakt</th></tr></thead><tbody>
-<?php foreach ($carriers as $item): ?>
-<tr><td><?=$item['kind']==='factory'?'Fabryka':'Przewoźnik'?></td><td><?=e($item['name'])?></td><td><?=e(implode(' · ',array_filter([$item['country'],$item['address'],$item['email'],$item['phone']])))?></td></tr>
-<?php endforeach ?>
-</tbody></table></div>
 </details>
 <?php endif ?>
 </div>
@@ -690,10 +697,25 @@ function splitPickup() {
         if (brand) selectBrand(brand);
     }
     const found = raw.match(marker);
+    const date = raw.match(/(?:data\s+odbioru|odbiór|załadunek)\s*[:–-]?\s*(?:(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[./-](\d{1,2})[./-](\d{4}))/iu);
+    const kg = raw.match(/(?:waga(?:\s+brutto)?\s*[:=]?\s*)?(\d{1,3}(?:[ \u00a0]\d{3})+|\d+)(?:([,.]\d{1,2}))?\s*(kg|t)\b/iu);
+    const pallets = raw.match(/(?:liczba palet|ilość palet|palety|palet)\s*[:=]?\s*(\d+)|\b(\d+)\s+palet(?:y|a)?\b/iu);
+    const fields = paste.closest('form').elements;
+    if (date) {
+        const iso = date[1] ? date[1]+'-'+date[2]+'-'+date[3] : date[6]+'-'+date[5].padStart(2,'0')+'-'+date[4].padStart(2,'0');
+        const parsed = new Date(iso+'T00:00:00Z');
+        if (!Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0,10) === iso) fields.namedItem('pickup').value = iso;
+    }
+    if (kg) {
+        const weight = Number((kg[1]+(kg[2] || '')).replace(/\s/g,'').replace(',','.')) * (kg[3].toLowerCase() === 't' ? 1000 : 1);
+        if (weight > 0 && weight < 1e8) fields.namedItem('weight').value = String(Number(weight.toFixed(2)));
+    }
+    if (pallets && Number(pallets[1] || pallets[2]) <= 999999) fields.namedItem('pallets').value = pallets[1] || pallets[2];
     const lines = raw.replace(marker, '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     const label = /(?:adres(?:\s+punktu)?\s+(?:odbioru|załadunku)|punkt odbioru|miejsce załadunku)\s*:/iu;
     const addressStart = lines.findIndex(line => label.test(line));
-    const addressLines = addressStart >= 0 ? lines.slice(addressStart, addressStart + 3) : lines;
+    const addressLines = (addressStart >= 0 ? lines.slice(addressStart, addressStart + 3) : lines)
+        .filter(line => !/^(?:data|waga|liczba palet|ilość palet|palety|odbiór\s*:|załadunek\s*:)/iu.test(line));
     const address = addressLines.map(line => line.replace(label,'').trim()).filter(Boolean).join(', ');
     const looksLikeAddress = /\d{2}-\d{3}|\b\d{5}\b|\b(?:ul\.|via\s|al\.|strada\s)/iu.test(address);
     if (found) reference.value = found[1];
@@ -704,7 +726,7 @@ function splitPickup() {
         : 'Sprawdź pola i uzupełnij dane, których nie udało się odczytać.';
 }
 document.getElementById('split-pickup').addEventListener('click', splitPickup);
-paste.addEventListener('paste', () => requestAnimationFrame(splitPickup));
+
 for (const [, brands] of groups) {
     const group = document.createElement('div');
     group.className = 'factory-group';
@@ -802,14 +824,52 @@ orderForm.addEventListener('input', updatePreviews);
 orderForm.addEventListener('change', updatePreviews);
 for (const field of [...driverFields,email]) field.addEventListener('input', updatePreviews);
 updatePreviews();
-if (country) {
-    const photo = document.getElementById('factory-photo');
-    const rawText = document.getElementById('factory-photo-text');
-    const photoStatus = document.getElementById('factory-photo-status');
-    let ocrLibrary;
+let ocrLibrary;
+function bindTransportPhoto(prefix, rawText, photoStatus, fill) {
+    const photo = document.getElementById(prefix+'-photo');
+    async function readPhoto(file) {
+        if (!file || !['image/png','image/jpeg','image/webp'].includes(file.type) || file.size > 12000000) {
+            photoStatus.textContent = 'Wybierz zdjęcie PNG, JPG lub WebP do 12 MB.';
+            return;
+        }
+        photo.disabled = true;
+        photoStatus.textContent = 'Odczytuję zdjęcie…';
+        let worker;
+        try {
+            ocrLibrary ??= new Promise((resolve,reject) => {
+                const script = document.createElement('script');
+                script.src = '/app/transport-ocr/tesseract.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.append(script);
+            });
+            await ocrLibrary;
+            const base = new URL('/app/transport-ocr/',location.origin).href;
+            worker = await Tesseract.createWorker(['pol','eng'],1,{
+                workerPath:base+'worker.min.js',corePath:base,langPath:base,workerBlobURL:false
+            });
+            const {data} = await worker.recognize(file);
+            rawText.value = data.text.trim().slice(0,12000);
+            fill(rawText.value.trim(),photoStatus);
+        } catch {
+            ocrLibrary = null;
+            photoStatus.textContent = 'Odczyt zdjęcia się nie powiódł. Spróbuj ponownie lub wklej tekst.';
+        } finally {
+            photo.disabled = false;
+            photo.value = '';
+            if (worker) await worker.terminate();
+        }
+    }
 
-    function fillFactoryFields() {
-        const raw = rawText.value.trim();
+    photo.addEventListener('change', () => readPhoto(photo.files[0]));
+    rawText.addEventListener('paste', event => {
+        const image = Array.from(event.clipboardData.files).find(file => file.type.startsWith('image/'));
+        if (!image) { requestAnimationFrame(() => fill(rawText.value.trim(),photoStatus)); return; }
+        event.preventDefault();
+        if (!photo.disabled) readPhoto(image);
+    });
+}
+    function fillFactoryFields(raw, photoStatus) {
         if (!raw) {
             photoStatus.textContent = 'Dodaj zdjęcie lub wklej tekst.';
             return;
@@ -839,49 +899,30 @@ if (country) {
         photoStatus.textContent = 'Sprawdź uzupełnione pola i dopisz brakujące dane przed zapisaniem.';
     }
 
-    async function readFactoryPhoto(file) {
-        if (!file || !['image/png','image/jpeg','image/webp'].includes(file.type) || file.size > 12000000) {
-            photoStatus.textContent = 'Wybierz zdjęcie PNG, JPG lub WebP do 12 MB.';
-            return;
-        }
-        photo.disabled = true;
-        photoStatus.textContent = 'Odczytuję zdjęcie…';
-        let worker;
-        try {
-            ocrLibrary ??= new Promise((resolve,reject) => {
-                const script = document.createElement('script');
-                script.src = '/app/transport-ocr/tesseract.min.js';
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.append(script);
-            });
-            await ocrLibrary;
-            const base = new URL('/app/transport-ocr/',location.origin).href;
-            worker = await Tesseract.createWorker(['pol','eng'],1,{
-                workerPath:base+'worker.min.js',corePath:base,langPath:base,workerBlobURL:false
-            });
-            const {data} = await worker.recognize(file);
-            rawText.value = data.text.trim().slice(0,12000);
-            fillFactoryFields();
-        } catch {
-            ocrLibrary = null;
-            photoStatus.textContent = 'Odczyt zdjęcia się nie powiódł. Spróbuj ponownie lub wklej tekst.';
-        } finally {
-            photo.disabled = false;
-            photo.value = '';
-            if (worker) await worker.terminate();
-        }
-    }
 
-    photo.addEventListener('change', () => readFactoryPhoto(photo.files[0]));
-    rawText.addEventListener('paste', event => {
-        const image = Array.from(event.clipboardData.files).find(file => file.type.startsWith('image/'));
-        if (!image) return;
-        event.preventDefault();
-        if (!photo.disabled) readFactoryPhoto(image);
-    });
-    document.getElementById('fill-factory-fields').addEventListener('click',fillFactoryFields);
+function fillCarrierFields(raw, status) {
+    if (!raw) { status.textContent = 'Dodaj zdjęcie lub wklej tekst.'; return; }
+    const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const email = raw.match(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/i)?.[0];
+    const phoneLine = lines.find(line => /^(?:telefon|tel\.?|kom\.?|whatsapp)\s*[:+0-9]/i.test(line));
+    const phone = (phoneLine || lines.find(line => /^\+\d[\d ().-]{7,24}$/.test(line)) || '').match(/\+?\d[\d ()-]{7,22}\d/)?.[0]?.replace(/[^0-9+]/g,'');
+    const name = lines.find(line => /^(?:firma|nazwa firmy|przewoźnik)\s*:/i.test(line))?.replace(/^[^:]+:\s*/,'')
+        || lines.find(line => /\p{L}/u.test(line) && !/[@:]|^(?:ul\.|adres|tel|fax|nip|regon|www)/i.test(line));
+    if (name && name.length <= 150) document.getElementById('carrier-name').value = name;
+    if (email && email.length <= 254) document.getElementById('carrier-email').value = email;
+    if (phone && /^\+\d{8,15}$/.test(phone)) document.getElementById('carrier-phone').value = phone;
+    else if (phone && /^\d{9}$/.test(phone)) document.getElementById('carrier-phone').value = '+48'+phone;
+    status.textContent = 'Sprawdź nazwę, e-mail i telefon przed zapisaniem.';
 }
+if (country) {
+    for (const [prefix,fill] of [['factory',fillFactoryFields],['carrier',fillCarrierFields]]) {
+        const input = document.getElementById(prefix+'-photo-text');
+        const status = document.getElementById(prefix+'-photo-status');
+        bindTransportPhoto(prefix,input,status,fill);
+        document.getElementById('fill-'+prefix+'-fields').addEventListener('click',() => fill(input.value.trim(),status));
+    }
+}
+bindTransportPhoto('pickup',paste,message,splitPickup);
 </script>
 </body>
 </html>
