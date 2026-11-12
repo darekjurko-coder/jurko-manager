@@ -262,3 +262,6 @@ CREATE TABLE IF NOT EXISTS jm_transport_orders (
  FOREIGN KEY (factory_id) REFERENCES jm_transport_directory(id),
  FOREIGN KEY (carrier_id) REFERENCES jm_transport_directory(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Moduł: transport/018_unload.sql
+ALTER TABLE jm_transport_directory MODIFY kind ENUM('factory','carrier','unload') NOT NULL;
