@@ -366,7 +366,7 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 main{max-width:1600px}
 .transport-history[hidden]{display:none}.transport-sidebar>a{display:block;margin-bottom:7px;text-align:center}
 .transport-messages textarea{font-size:12px}.transport-messages h2{font-size:14px}
-@media(max-width:1050px){.transport-layout{grid-template-columns:170px minmax(0,1fr)}.transport-messages,.transport-history{grid-column:2;grid-row:auto}.factory-menu{position:static}}
+@media(max-width:1050px){.transport-layout{grid-template-columns:minmax(125px,.65fr) minmax(0,1.4fr) minmax(185px,1fr)}.transport-messages .grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.transport-layout{display:block}.transport-sidebar,.transport-content,.transport-messages{margin-bottom:16px}}
 
 .pickup-block{display:grid;gap:6px;margin:0 0 8px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
@@ -392,6 +392,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 [id$="-photo-status"]:empty,#pickup-message:empty{display:none}
 .shipment-header{display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:7px}
 .shipment-header>label{flex:0 1 52%}.shipment-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1050px){.shipment-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .directory-buttons{display:grid;gap:4px;margin:6px 0}
 .directory-buttons button{text-align:left;background:#f1f2f3;color:#293238;white-space:normal;overflow-wrap:anywhere}
 .directory-buttons button:hover{background:#e0e3e6}
