@@ -44,9 +44,10 @@ function numberField(string $key, int $digits, bool $required = false, bool $int
     return $value;
 }
 
-function transportDate(string $key): string
+function transportDate(string $key): ?string
 {
-    $value = field($key, 10, true);
+    $value = field($key, 10);
+    if ($value === '') return null;
     $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
     if (!$date || $date->format('Y-m-d') !== $value || $value < '2000-01-01') {
         throw new InvalidArgumentException('Sprawdź daty odbioru i dostawy.');
@@ -157,12 +158,14 @@ try {
                     break;
                 case 'create':
                     $selectedPoint = numberField('factory', 10, false, true);
-                    $carrier = numberField('carrier', 10, true, true);
-                    $address = field('pickup_address', 300, true);
-                    $query = $db->prepare("SELECT id FROM jm_transport_directory WHERE id=? AND kind='carrier'");
-                    $query->execute([$carrier]);
-                    if (!$query->fetchColumn()) {
-                        throw new InvalidArgumentException('Wybierz przewoźnika z kartoteki.');
+                    $carrier = numberField('carrier', 10, false, true);
+                    $address = field('pickup_address', 300);
+                    if ($carrier !== null) {
+                        $query = $db->prepare("SELECT id FROM jm_transport_directory WHERE id=? AND kind='carrier'");
+                        $query->execute([$carrier]);
+                        if (!$query->fetchColumn()) {
+                            throw new InvalidArgumentException('Wybierz przewoźnika z kartoteki.');
+                        }
                     }
                     if ($selectedPoint !== null) {
                         $query = $db->prepare("SELECT name,country FROM jm_transport_directory WHERE id=? AND kind='factory'");
@@ -174,23 +177,29 @@ try {
                         $name = $brand['name'];
                         $country = $brand['country'];
                     } else {
-                        $country = choice('pickup_country', array_keys(FACTORIES));
-                        $name = choice('pickup_brand', FACTORIES[$country]);
+                        $country = field('pickup_country',20);
+                        $name = field('pickup_brand',150);
+                        if ($name !== '' && !in_array($name, FACTORIES[$country] ?? [], true)) {
+                            throw new InvalidArgumentException('Wybierz fabrykę z kartoteki.');
+                        }
                     }
                     $pickup = transportDate('pickup');
                     $delivery = transportDate('delivery');
                     $request = field('request', 32, true);
-                    if ($delivery < $pickup || !preg_match('/^[a-f0-9]{32}$/D', $request)) {
+                    if (($delivery !== null && $pickup !== null && $delivery < $pickup) || !preg_match('/^[a-f0-9]{32}$/D', $request)) {
                         throw new InvalidArgumentException('Sprawdź datę dostawy i odśwież formularz.');
                     }
-                    $values = [choice('company',array_keys(COMPANIES)),field('reference',150,true),
-                        field('delivery_address',300,true),$pickup,$delivery,numberField('pallets',6,true,true),
-                        numberField('weight',8,true),numberField('agreed',10),choice('currency',['PLN','EUR']),field('notes',6000),$request];
+                    $values = [choice('company',array_keys(COMPANIES)),field('reference',150),
+                        field('delivery_address',300),$pickup,$delivery,numberField('pallets',6,false,true),
+                        numberField('weight',8),numberField('agreed',10),choice('currency',['PLN','EUR']),field('notes',6000),$request];
                     $db->beginTransaction();
                     try {
-                        $query = $db->prepare("INSERT INTO jm_transport_directory (kind,name,country,address) VALUES ('factory',?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
-                        $query->execute([$name,$country,$address]);
-                        $factory = $db->lastInsertId();
+                        $factory = null;
+                        if ($name !== '' || $address !== '') {
+                            $query = $db->prepare("INSERT INTO jm_transport_directory (kind,name,country,address) VALUES ('factory',?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
+                            $query->execute([$name,$country,$address]);
+                            $factory = $db->lastInsertId();
+                        }
                         $query = $db->prepare('INSERT INTO jm_transport_orders (account_id,factory_id,carrier_id,company,reference,delivery_address,pickup_date,delivery_date,pallets,weight_kg,agreed_net,currency,notes,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id');
                         $query->execute([$actor,$factory,$carrier,...$values]);
                         $query = $db->prepare('SELECT id FROM jm_transport_orders WHERE account_id=? AND request_id=?');
@@ -249,7 +258,7 @@ try {
     unset($_SESSION['transport_saved']);
     $employees = $owner ? $db->query("SELECT email,active FROM jm_accounts WHERE role='employee' ORDER BY email")->fetchAll() : [];
     $directory = $db->query('SELECT * FROM jm_transport_directory ORDER BY country,name,address')->fetchAll();
-    $factories = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'factory');
+    $factories = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'factory' && $row['name'] !== '' && $row['address'] !== '');
     $unloads = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'unload');
     $openOrder = is_string($_GET['order'] ?? null) && ctype_digit($_GET['order']) ? $_GET['order'] : '';
     $carriers = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'carrier');
@@ -258,8 +267,8 @@ try {
         t.goods_invoice,t.carrier_invoice,t.invoice_pdf IS NOT NULL AS has_pdf,
         f.name AS factory, f.address AS pickup_address, c.name AS carrier,
         c.email AS carrier_email, c.phone AS carrier_phone, a.email AS author
-        FROM jm_transport_orders t JOIN jm_transport_directory f ON f.id=t.factory_id
-        JOIN jm_transport_directory c ON c.id=t.carrier_id JOIN jm_accounts a ON a.id=t.account_id';
+        FROM jm_transport_orders t LEFT JOIN jm_transport_directory f ON f.id=t.factory_id
+        LEFT JOIN jm_transport_directory c ON c.id=t.carrier_id JOIN jm_accounts a ON a.id=t.account_id';
     $filters = $owner ? [] : ['t.account_id = ?'];
     $params = $owner ? [] : [$actor];
     if (($_GET['unbilled'] ?? '') === '1') {
@@ -432,25 +441,25 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <input type="hidden" name="request" value="<?=e(bin2hex(random_bytes(16)))?>">
 <div class="pickup-block shipment-step">
 <div class="shipment-header"><h3 id="pickup-title">Punkt odbioru</h3>
-<label>Adres dostawy<input id="delivery-address" name="delivery_address" maxlength="300" value="<?=previous('delivery_address') ?: 'JURKO, Al. Jerozolimskie 229, 02-495 Warszawa'?>" required></label>
+<label>Adres dostawy<input id="delivery-address" name="delivery_address" maxlength="300" value="<?=previous('delivery_address') ?: 'JURKO, Al. Jerozolimskie 229, 02-495 Warszawa'?>"></label>
 </div>
 <input type="hidden" id="pickup-brand" name="pickup_brand" value="<?=previous('pickup_brand')?>">
 <input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
 <label hidden>Zapisany punkt odbioru<select name="factory" id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
-<label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>" required></label>
+<label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>"></label>
 </div>
 <div class="pickup-block shipment-step shipment-fields">
-<label>Dyspozycja<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
-<label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>" required></label>
-<label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>" required></label>
-<label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>" required></label>
-<label>Data dostawy<input type="date" name="delivery" value="<?=previous('delivery')?>" required></label>
+<label>Dyspozycja<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>"></label>
+<label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>"></label>
+<label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>"></label>
+<label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>"></label>
+<label>Data dostawy<input type="date" name="delivery" value="<?=previous('delivery')?>"></label>
 </div>
 <div class="pickup-block shipment-step">
 <h3>Przewoźnik</h3>
 <div id="selected-carrier" class="selected-carrier" hidden></div>
-<label>Przewoźnik<select name="carrier" required id="order-carrier"><option value="">Wybierz przewoźnika</option><?php foreach ($carriers as $item): ?><option value="<?=e($item['id'])?>" <?=previous('carrier')===(string)$item['id']?'selected':''?>><?=e($item['name'])?></option><?php endforeach ?></select></label>
-<?php if (!$carriers): ?><p class="muted">Dodaj przewoźnika w kartotece, aby zapisać zlecenie.</p><?php endif ?>
+<label hidden>Przewoźnik<select name="carrier" id="order-carrier"><option value="">Wybierz przewoźnika</option><?php foreach ($carriers as $item): ?><option value="<?=e($item['id'])?>" <?=previous('carrier')===(string)$item['id']?'selected':''?>><?=e($item['name'])?></option><?php endforeach ?></select></label>
+<?php if (!$carriers): ?><p class="muted">Brak przewoźników w kartotece.</p><?php endif ?>
 </div>
 <details class="shipment-step"><summary>Spółka, cena i uwagi</summary><div class="grid">
 <label>Spółka<select name="company"><?php foreach (COMPANIES as $id => $name): ?><option value="<?=e($id)?>" <?=previous('company')===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
@@ -541,7 +550,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <tr id="order-<?=e($order['id'])?>">
 <td><a href="<?=e('/transport.php?'.($embedded ? 'panel=1&' : '').'history=1&order='.$order['id'].'#order-'.$order['id'])?>"><?=e($number)?></a><br><?=e($order['reference'])?><br><small><?=e(COMPANIES[$order['company']])?><br><?=e($order['author'])?></small></td>
 <td><?=e($order['factory'])?><br><small><?=e($order['pickup_address'])?></small><br><?=e($order['carrier'])?></td>
-<td><?=e($order['pickup_date'])?><br><?=e($order['delivery_date'])?><br><small><?=e($order['delivery_address'])?><br><?=e($order['pallets'])?> pal. · <?=e($order['weight_kg'])?> kg</small><?php if ($order['notes'] !== ''): ?><details><summary>Uwagi</summary><?=nl2br(e($order['notes']))?></details><?php endif ?></td>
+<td><?=e($order['pickup_date'])?><br><?=e($order['delivery_date'])?><br><small><?=e($order['delivery_address'])?><br><?=e($order['pallets'] === null ? '—' : $order['pallets'].' pal.')?> · <?=e($order['weight_kg'] === null ? '—' : $order['weight_kg'].' kg')?></small><?php if ($order['notes'] !== ''): ?><details><summary>Uwagi</summary><?=nl2br(e($order['notes']))?></details><?php endif ?></td>
 <td>Uzgodniony <?=e($order['agreed_net'] === null ? '—' : $order['agreed_net'].' '.$order['currency'])?><br>Rozliczony <?=e($order['actual_net'] === null ? '—' : $order['actual_net'].' '.$order['currency'])?></td>
 <td><details <?=$openOrder===(string)$order['id'] ? 'open' : ''?>><summary><?=e(STATUSES[$order['status']])?><?php if ($order['carrier_invoice'] !== ''): ?><br><small><?=e($order['carrier_invoice'])?></small><?php endif ?></summary>
 <form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?=e($order['id'])?>">
@@ -553,8 +562,8 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <?php endif ?>
 <button>Zapisz</button></form></details></td>
 <td>
-<?php if ($order['carrier_email'] !== ''): ?><a href="<?=e('mailto:'.str_replace('%40','@',rawurlencode($order['carrier_email'])).'?subject='.rawurlencode('Zlecenie transportu '.$number).'&body='.rawurlencode($message))?>">E-mail</a><br><?php endif ?>
-<?php if ($order['carrier_phone'] !== ''): ?><a href="<?=e('https://wa.me/'.$order['carrier_phone'].'?text='.rawurlencode($message))?>" target="_blank" rel="noopener noreferrer">WhatsApp</a><?php endif ?>
+<?php if (!empty($order['carrier_email'])): ?><a href="<?=e('mailto:'.str_replace('%40','@',rawurlencode($order['carrier_email'])).'?subject='.rawurlencode('Zlecenie transportu '.$number).'&body='.rawurlencode($message))?>">E-mail</a><br><?php endif ?>
+<?php if (!empty($order['carrier_phone'])): ?><a href="<?=e('https://wa.me/'.$order['carrier_phone'].'?text='.rawurlencode($message))?>" target="_blank" rel="noopener noreferrer">WhatsApp</a><?php endif ?>
 </td></tr>
 <?php endforeach ?>
 </tbody></table></div>
