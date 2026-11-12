@@ -16,5 +16,6 @@
   "sales/015_original_report.sql",
   "transport/016_directory.sql",
   "transport/017_orders.sql",
-  "transport/018_unload.sql"
+  "transport/018_unload.sql",
+  "transport/019_optional_order_fields.sql"
 ]
