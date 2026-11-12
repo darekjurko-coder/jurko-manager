@@ -143,7 +143,7 @@ try {
                     $name = field('name', 150, true);
                     $country = $kind === 'factory' ? choice('country', array_keys(FACTORIES)) : '';
                     $address = $kind === 'factory' ? field('address', 300, true) : '';
-                    $email = $kind === 'carrier' ? field('email', 254) : '';
+                    $email = field('email', 254);
                     $phone = $kind === 'carrier' ? preg_replace('/[ +()-]/', '', field('phone', 30)) : '';
                     if (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) ||
                         ($phone !== '' && !preg_match('/^[1-9][0-9]{7,14}$/D', $phone)) ||
@@ -306,14 +306,19 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}.table{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e2e9e5;text-align:left;vertical-align:top}td details{min-width:200px}td form label{margin:6px 0}
 .notice{padding:12px;background:#e1f1e8;border-radius:8px}.error{background:#fce4e1}.muted,small{color:#4b6155}
 .check{display:flex;align-items:center;gap:8px}nav form{margin:0}
-.transport-layout{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}
-.transport-content{min-width:0;grid-column:1;grid-row:1}.factory-menu{grid-column:2;grid-row:1}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:14px;padding:20px;margin:0 0 16px}
+.transport-layout{display:grid;grid-template-columns:minmax(170px,.65fr) minmax(300px,1.4fr) minmax(240px,1fr);gap:16px;align-items:start}
+.transport-content,.transport-messages,.transport-sidebar{min-width:0}.transport-content{grid-column:2;grid-row:1}.transport-sidebar{grid-column:1;grid-row:1}.transport-messages{grid-column:3;grid-row:1}.transport-history{grid-column:2/-1;min-width:0}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:14px;padding:20px;margin:0 0 16px}
 .factory-menu{position:sticky;top:12px;background:white;border:1px solid #d8e1dc;border-radius:14px;padding:14px}
 .factory-menu h2{font-size:18px}.factory-group{display:grid;gap:5px;margin-bottom:16px}
 .factory-menu button{width:100%;text-align:left;background:#edf4ef;color:#19533e;overflow-wrap:anywhere}
 .factory-menu button:hover,.factory-menu button[aria-pressed=true]{background:#19533e;color:white}
 #factory-results{display:grid;gap:5px;margin-top:8px}#factory-feedback{overflow-wrap:anywhere}
-@media(max-width:740px){.transport-layout{grid-template-columns:minmax(0,1fr)}.factory-menu{position:static;grid-column:1;grid-row:1}.transport-content{grid-row:2}}
+main{max-width:1600px}
+.transport-history[hidden]{display:none}.transport-sidebar>a{display:block;margin-bottom:12px;text-align:center}
+.transport-messages textarea{font-size:14px}.transport-messages h2{font-size:17px}
+@media(max-width:1050px){.transport-layout{grid-template-columns:170px minmax(0,1fr)}.transport-messages,.transport-history{grid-column:2;grid-row:auto}.factory-menu{position:static}}
+@media(max-width:600px){.transport-layout{display:block}.transport-sidebar,.transport-content,.transport-messages{margin-bottom:16px}}
+
 .pickup-block{display:grid;gap:10px;margin:0 0 18px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
 #carrier-recommendations{margin:8px 0 14px}#carrier-recommendations td{padding:5px 0}#carrier-recommendations button{padding:6px 8px}
 </style>
@@ -327,6 +332,8 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <?php endif ?>
 <main>
 <div class="transport-layout">
+<div class="transport-sidebar">
+<a class="button" href="#transport-history" id="open-history" aria-expanded="false">Wcześniejsze zlecenia</a>
 <aside class="factory-menu" aria-label="Fabryki">
 <h2>Fabryki</h2>
 <div id="factory-shortcuts"></div>
@@ -335,12 +342,13 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <div id="factory-top-carriers"></div>
 <p id="factory-feedback" class="muted" role="status"></p>
 </aside>
+</div>
 <div class="transport-content">
 <h1>Transport zewnętrzny</h1>
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
 <section id="new-order">
-<h2>Nowe zlecenie</h2>
+<h2>Nowa przesyłka</h2>
 
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="create">
@@ -350,10 +358,13 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <input type="hidden" id="pickup-brand" name="pickup_brand" value="<?=previous('pickup_brand')?>">
 <input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
 <label>Zapisany punkt odbioru<select name="factory" id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
-<label>Wklej dyspozycję z fabryki<textarea id="pickup-paste" rows="3" maxlength="6000" placeholder="Adres odbioru i numer dyspozycji"></textarea></label>
+<label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>" required></label>
+<details><summary>Wklej dane fabryki lub dyspozycję</summary>
+<label>Tekst od fabryki<textarea id="pickup-paste" rows="3" maxlength="6000" placeholder="Nazwa fabryki, adres i numer dyspozycji"></textarea></label>
 <div><button type="button" id="split-pickup">Rozdziel adres i numer</button></div>
 <p id="pickup-message" class="muted" role="status"></p>
-<label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>" required></label>
+</details>
+<h3>Dyspozycja</h3>
 <label>Numer dyspozycji do odbioru<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
 </div>
 <div class="pickup-block">
@@ -399,7 +410,8 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <label>Kraj<select name="country" required id="factory-country"><?php foreach (FACTORIES as $country => $names): ?><option><?=e($country)?></option><?php endforeach ?></select></label>
 <label>Fabryka<input id="directory-factory" name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
 <label>Adres odbioru<input id="directory-address" name="address" maxlength="300" required></label>
-<p><button>Dodaj punkt odbioru</button></p>
+<label>E-mail do fabryki<input name="email" type="email" maxlength="254"></label>
+<p><button>Zapisz punkt odbioru</button></p>
 </form>
 <form method="post">
 <h2>Przewoźnik</h2>
@@ -417,10 +429,30 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 </tbody></table></div>
 </details>
 <?php endif ?>
+</div>
+<aside class="transport-messages" aria-label="Wiadomości transportowe">
 <section>
-<h2>Zlecenia transportowe</h2>
+<h2>Zlecenie do przewoźnika</h2>
+<label>Treść wiadomości<textarea id="carrier-preview" rows="9" readonly></textarea></label>
+<div class="actions"><a id="carrier-mail" hidden>E-mail</a><a id="carrier-whatsapp" hidden target="_blank" rel="noopener noreferrer">WhatsApp</a></div>
+</section>
+<section>
+<h2>Dane kierowcy do fabryki</h2>
+<div class="grid">
+<label>Imię i nazwisko<input id="driver-name" maxlength="100"></label>
+<label>Telefon<input id="driver-phone" type="tel" maxlength="32"></label>
+<label>Rejestracja pojazdu<input id="driver-plate" maxlength="24"></label>
+<label>E-mail do fabryki<input id="factory-email" type="email" maxlength="254" list="factory-emails"><datalist id="factory-emails"></datalist></label>
+</div>
+<p><label>Treść wiadomości<textarea id="factory-preview" rows="7" readonly></textarea></label></p>
+<a id="factory-mail" hidden>Otwórz e-mail do fabryki</a>
+</section>
+</aside>
+<section class="transport-history" id="transport-history" <?=($search === '' && ($_GET['unbilled'] ?? '') !== '1' && !isset($_GET['history'])) ? 'hidden' : ''?>>
+<h2>Wcześniejsze zlecenia</h2>
 <form method="get" class="actions">
 <?php if ($embedded): ?><input type="hidden" name="panel" value="1"><?php endif ?>
+<input type="hidden" name="history" value="1">
 <label>Szukaj zlecenia, zamówienia lub faktury<input name="q" value="<?=e($search)?>" maxlength="150"></label>
 <label class="check"><input type="checkbox" name="unbilled" value="1" <?=($_GET['unbilled']??'')==='1'?'checked':''?>> Dostarczone bez faktury</label>
 <button>Filtruj</button>
@@ -460,7 +492,6 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <?php endif ?>
 </section>
 </div>
-</div>
 </main>
 <script nonce="<?=e($nonce)?>">
 const country = document.getElementById('factory-country');
@@ -482,7 +513,7 @@ const search = document.getElementById('factory-search');
 const results = document.getElementById('factory-results');
 const feedback = document.getElementById('factory-feedback');
 const orderAddress = document.getElementById('order-address');
-const points = <?=json_encode(array_values(array_map(static fn(array $row): array => array_intersect_key($row, array_flip(['id','name','country','address'])), $factories)), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
+const points = <?=json_encode(array_values(array_map(static fn(array $row): array => array_intersect_key($row, array_flip(['id','name','country','address','email'])), $factories)), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 const normalize = value => value.toLocaleLowerCase('pl').replace(/ł/g,'l').normalize('NFD').replace(/\p{M}/gu,'').replace(/[^a-z0-9]+/g,'');
 const groups = [['Polska',['Tubądzin','Paradyż','Cerrad']],['Włochy',['Novabell','Italgraniti']]];
 const directory = new Map();
@@ -524,7 +555,7 @@ function showBrand(brand) {
         caption.textContent = 'Najczęstsi przewoźnicy · ' + brand.name;
         for (const option of top) {
             const row = table.insertRow();
-            addButton(row.insertCell(), option.text, () => { carrier.value = option.value; });
+            addButton(row.insertCell(), option.text, () => { carrier.value = option.value; carrier.dispatchEvent(new Event('change',{bubbles:true})); });
             row.insertCell().textContent = totals.get(option.value);
         }
         container.append(table);
@@ -534,6 +565,7 @@ function selectPoint(point) {
     factory.value = String(point.id);
     factory.dispatchEvent(new Event('change'));
     feedback.textContent = point.address;
+    orderAddress.dispatchEvent(new Event('input',{bubbles:true}));
     orderAddress.focus({preventScroll:true});
     document.getElementById('new-order').scrollIntoView({block:'start'});
 }
@@ -569,8 +601,13 @@ function selectBrand(brand) {
         results.querySelector('button').focus({preventScroll:true});
     } else {
         feedback.textContent = 'Wklej dyspozycję lub wpisz adres odbioru.';
-        document.getElementById('pickup-paste').focus({preventScroll:true});
+        if (brand.name === 'Tubądzin') {
+            orderAddress.value = 'Tubądzin Management Group, Cedrowice Parcela 11, 95-035 Ozorków';
+            feedback.textContent = orderAddress.value;
+        }
+        orderAddress.focus({preventScroll:true});
     }
+    orderAddress.dispatchEvent(new Event('input',{bubbles:true}));
 }
 const paste = document.getElementById('pickup-paste');
 const reference = document.getElementById('pickup-reference');
@@ -579,6 +616,11 @@ function splitPickup() {
     const raw = paste.value.trim();
     if (!raw) { message.textContent = 'Wklej dyspozycję z fabryki.'; return; }
     const marker = /\b(?:(?:nr|numer)\.?\s+(?:dyspozycji|odbioru|awizacji|zamówienia)|dyspozycja(?:\s+do\s+odbioru)?|referencja(?:\s+odbioru)?|pickup\s+(?:reference|number))\s*(?:nr\.?\s*)?[:#–-]?\s*([\p{L}\d][\p{L}\d._/-]*)/iu;
+    if (!brandInput.value) {
+        const normalizedText = normalize(raw);
+        const brand = [...directory.entries()].find(([name]) => normalizedText.includes(name))?.[1];
+        if (brand) selectBrand(brand);
+    }
     const found = raw.match(marker);
     const lines = raw.replace(marker, '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
     const label = /(?:adres(?:\s+punktu)?\s+(?:odbioru|załadunku)|punkt odbioru|miejsce załadunku)\s*:/iu;
@@ -588,6 +630,7 @@ function splitPickup() {
     const looksLikeAddress = /\d{2}-\d{3}|\b\d{5}\b|\b(?:ul\.|via\s|al\.|strada\s)/iu.test(address);
     if (found) reference.value = found[1];
     if (looksLikeAddress && address.length <= 300) orderAddress.value = address;
+    orderAddress.dispatchEvent(new Event('input',{bubbles:true}));
     message.textContent = found && looksLikeAddress && address.length <= 300
         ? 'Uzupełniono adres i numer. Sprawdź oba pola przed zapisaniem.'
         : 'Sprawdź pola i uzupełnij dane, których nie udało się odczytać.';
@@ -614,6 +657,55 @@ search.addEventListener('input', () => {
     }
     if (!found) feedback.textContent = 'Brak pasujących fabryk.';
 });
+const orderForm = document.querySelector('#new-order form');
+const orderHistory = document.getElementById('transport-history');
+const historyLink = document.getElementById('open-history');
+historyLink.setAttribute('aria-expanded', String(!orderHistory.hidden));
+historyLink.addEventListener('click', () => {
+    orderHistory.hidden = false;
+    historyLink.setAttribute('aria-expanded','true');
+});
+const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','email','phone'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
+const carrierPreview = document.getElementById('carrier-preview');
+const factoryPreview = document.getElementById('factory-preview');
+const email = document.getElementById('factory-email');
+let previousDraftBrand = null;
+const driverFields = ['driver-name','driver-phone','driver-plate'].map(id => document.getElementById(id));
+function draftLink(id, url) {
+    const link = document.getElementById(id);
+    link.hidden = !url;
+    if (url) link.href = url;
+    else link.removeAttribute('href');
+}
+function updatePreviews() {
+    const value = name => orderForm.elements.namedItem(name).value.trim();
+    if (previousDraftBrand !== brandInput.value) {
+        previousDraftBrand = brandInput.value;
+        const addresses = [...new Set((directory.get(normalize(brandInput.value))?.points || []).map(point => point.email).filter(Boolean))];
+        document.getElementById('factory-emails').replaceChildren(...addresses.map(address => new Option(address,address)));
+        email.value = addresses.length === 1 ? addresses[0] : '';
+    }
+    const referenceNumber = value('reference');
+    const subject = 'Odbiór z fabryki ' + (brandInput.value || '—') + (referenceNumber ? ' · ' + referenceNumber : '');
+    const common = [['Fabryka',brandInput.value],['Adres odbioru',value('pickup_address')],
+        ['Numer dyspozycji',referenceNumber],['Data odbioru',value('pickup')]];
+    const shipment = [...common,['Adres dostawy',value('delivery_address')],['Data dostawy',value('delivery')],
+        ['Waga brutto',value('weight') && value('weight')+' kg'],['Liczba palet',value('pallets')],
+        ['Uwagi',value('notes')]];
+    const driver = [...common,...driverFields.map((field,index) => [['Kierowca','Telefon','Rejestracja'][index],field.value.trim()])];
+    const compose = (intro, fields) => 'Dzień dobry,\n'+intro+'\n\n'+fields.filter(([,text])=>text).map(([label,text])=>label+': '+text).join('\n');
+    carrierPreview.value = compose('Proszę o odbiór i dostarczenie przesyłki.',shipment);
+    factoryPreview.value = compose('Przekazuję dane kierowcy do odbioru przesyłki.',driver);
+    const contact = carrierContacts[carrier.value];
+    const mailto = (address,body) => 'mailto:'+encodeURIComponent(address).replace(/%40/g,'@')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+    draftLink('carrier-mail', contact?.email ? mailto(contact.email,carrierPreview.value) : '');
+    draftLink('carrier-whatsapp', /^\d{8,15}$/.test(contact?.phone || '') ? 'https://wa.me/'+contact.phone+'?text='+encodeURIComponent(carrierPreview.value) : '');
+    draftLink('factory-mail', email.value.trim() && email.validity.valid ? mailto(email.value.trim(),factoryPreview.value) : '');
+}
+orderForm.addEventListener('input', updatePreviews);
+orderForm.addEventListener('change', updatePreviews);
+for (const field of [...driverFields,email]) field.addEventListener('input', updatePreviews);
+updatePreviews();
 </script>
 </body>
 </html>
