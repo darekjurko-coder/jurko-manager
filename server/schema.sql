@@ -265,3 +265,12 @@ CREATE TABLE IF NOT EXISTS jm_transport_orders (
 
 -- Moduł: transport/018_unload.sql
 ALTER TABLE jm_transport_directory MODIFY kind ENUM('factory','carrier','unload') NOT NULL;
+
+-- Moduł: transport/019_optional_order_fields.sql
+ALTER TABLE jm_transport_orders
+ MODIFY factory_id BIGINT UNSIGNED NULL,
+ MODIFY carrier_id BIGINT UNSIGNED NULL,
+ MODIFY pickup_date DATE NULL,
+ MODIFY delivery_date DATE NULL,
+ MODIFY pallets INT UNSIGNED NULL,
+ MODIFY weight_kg DECIMAL(10,2) NULL;
