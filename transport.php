@@ -145,7 +145,8 @@ try {
                     $address = $kind === 'factory' ? field('address', 300, true) : '';
                     $email = field('email', 254);
                     $phone = $kind === 'carrier' ? preg_replace('/[ +()-]/', '', field('phone', 30)) : '';
-                    if (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) ||
+                    $addresses = $kind === 'factory' ? array_map('trim', explode(',', $email)) : [$email];
+                    if (($email !== '' && count(array_filter($addresses, static fn(string $address): bool => filter_var($address, FILTER_VALIDATE_EMAIL) !== false)) !== count($addresses)) ||
                         ($phone !== '' && !preg_match('/^[1-9][0-9]{7,14}$/D', $phone)) ||
                         ($kind === 'carrier' && $email === '' && $phone === '')) {
                         throw new InvalidArgumentException('Podaj poprawny e-mail lub numer WhatsApp z kodem kraju.');
@@ -321,6 +322,10 @@ main{max-width:1600px}
 
 .pickup-block{display:grid;gap:10px;margin:0 0 18px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
 #carrier-recommendations{margin:8px 0 14px}#carrier-recommendations td{padding:5px 0}#carrier-recommendations button{padding:6px 8px}
+.factory-addresses{display:grid;gap:5px;margin:6px 0 9px 10px}.factory-addresses[hidden]{display:none}
+.factory-addresses button{font-size:13px}.factory-recipients{display:grid;gap:6px;margin-bottom:8px}
+.factory-recipients label{display:flex;align-items:center;gap:6px;padding:5px 8px;overflow-wrap:anywhere}
+.factory-recipients label:has(:checked){background:#e1f1e8;border-radius:6px}
 </style>
 </head>
 <body>
@@ -410,7 +415,7 @@ main{max-width:1600px}
 <label>Kraj<select name="country" required id="factory-country"><?php foreach (FACTORIES as $country => $names): ?><option><?=e($country)?></option><?php endforeach ?></select></label>
 <label>Fabryka<input id="directory-factory" name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
 <label>Adres odbioru<input id="directory-address" name="address" maxlength="300" required></label>
-<label>E-mail do fabryki<input name="email" type="email" maxlength="254"></label>
+<label>E-maile do fabryki<input name="email" type="email" multiple maxlength="254" placeholder="Adresy oddziel przecinkami"></label>
 <p><button>Zapisz punkt odbioru</button></p>
 </form>
 <form method="post">
@@ -442,9 +447,11 @@ main{max-width:1600px}
 <label>Imię i nazwisko<input id="driver-name" maxlength="100"></label>
 <label>Telefon<input id="driver-phone" type="tel" maxlength="32"></label>
 <label>Rejestracja pojazdu<input id="driver-plate" maxlength="24"></label>
-<label>E-mail do fabryki<input id="factory-email" type="email" maxlength="254" list="factory-emails"><datalist id="factory-emails"></datalist></label>
+
 </div>
 <p><label>Treść wiadomości<textarea id="factory-preview" rows="7" readonly></textarea></label></p>
+<div id="factory-emails" class="factory-recipients"></div>
+<label>Dodatkowy e-mail do fabryki<input id="factory-email" type="email" multiple maxlength="254"></label>
 <a id="factory-mail" hidden>Otwórz e-mail do fabryki</a>
 </section>
 </aside>
@@ -462,8 +469,8 @@ main{max-width:1600px}
 <?php foreach ($orders as $order):
     $number = transportNumber($order);
     $message = "Dzień dobry,\nproszę o odbiór towaru.\n\nZlecenie: $number\nSpółka: ".COMPANIES[$order['company']].
-        "\nFabryka: ".$order['factory']."\nAdres odbioru: ".$order['pickup_address']."\nData odbioru: ".$order['pickup_date'].
-        "\nAdres dostawy: ".$order['delivery_address']."\nData dostawy: ".$order['delivery_date'].
+         "\nFabryka: ".$order['factory']."\nOdbiór z: ".$order['pickup_address']."\nData odbioru: ".$order['pickup_date'].
+        "\nDostawa do: ".$order['delivery_address']."\nData dostawy: ".$order['delivery_date'].
         "\nReferencja: ".$order['reference']."\nPalety: ".$order['pallets']."\nWaga brutto: ".$order['weight_kg']." kg".
         ($order['agreed_net'] !== null ? "\nUzgodniona stawka netto: ".$order['agreed_net'].' '.$order['currency'] : '').
         "\n\nProszę o potwierdzenie zlecenia i podanie numeru $number na fakturze.";
@@ -584,29 +591,47 @@ function addButton(container, label, action) {
     button.textContent = label;
     button.addEventListener('click', action);
     container.append(button);
+    return button;
+}
+const defaultTubadzin = 'Tubądzin Management Group, Cedrowice Parcela 11, 95-035 Ozorków';
+let expandedFactory;
+function addFactory(container, brand) {
+    const group = document.createElement('div');
+    const addresses = document.createElement('div');
+    addresses.className = 'factory-addresses';
+    addresses.hidden = true;
+    const toggle = addButton(group, brand.name, () => {
+        const wasOpen = !addresses.hidden;
+        if (expandedFactory) {
+            expandedFactory.addresses.hidden = true;
+            expandedFactory.toggle.setAttribute('aria-expanded','false');
+        }
+        if (wasOpen) { expandedFactory = null; return; }
+        addresses.hidden = false;
+        toggle.setAttribute('aria-expanded','true');
+        expandedFactory = {addresses,toggle};
+        selectBrand(brand);
+    });
+    toggle.setAttribute('aria-expanded','false');
+    for (const point of brand.points) addButton(addresses, point.address, () => selectPoint(point));
+    if (!brand.points.length && brand.name === 'Tubądzin') {
+        addButton(addresses, defaultTubadzin, () => selectBrand(brand));
+    } else if (!brand.points.length) {
+        addresses.textContent = 'Brak zapisanych punktów odbioru.';
+    }
+    group.append(addresses);
+    container.append(group);
 }
 function selectBrand(brand) {
-    results.replaceChildren();
     showBrand(brand);
     if (brand.points.length === 1) {
         selectPoint(brand.points[0]);
         return;
     }
     factory.value = '';
-    orderAddress.value = '';
-    document.getElementById('new-order').scrollIntoView({block:'start'});
-    if (brand.points.length > 1) {
-        feedback.textContent = 'Wybierz punkt odbioru dla ' + brand.name + '.';
-        for (const point of brand.points) addButton(results, point.address, () => selectPoint(point));
-        results.querySelector('button').focus({preventScroll:true});
-    } else {
-        feedback.textContent = 'Wklej dyspozycję lub wpisz adres odbioru.';
-        if (brand.name === 'Tubądzin') {
-            orderAddress.value = 'Tubądzin Management Group, Cedrowice Parcela 11, 95-035 Ozorków';
-            feedback.textContent = orderAddress.value;
-        }
-        orderAddress.focus({preventScroll:true});
-    }
+    orderAddress.value = !brand.points.length && brand.name === 'Tubądzin' ? defaultTubadzin : '';
+    feedback.textContent = brand.points.length > 1 ? 'Wybierz punkt odbioru pod nazwą fabryki.'
+        : orderAddress.value || 'Wklej dyspozycję lub wpisz adres odbioru.';
     orderAddress.dispatchEvent(new Event('input',{bubbles:true}));
 }
 const paste = document.getElementById('pickup-paste');
@@ -641,7 +666,7 @@ for (const [, brands] of groups) {
     const group = document.createElement('div');
     group.className = 'factory-group';
     shortcuts.append(group);
-    for (const brand of brands) addButton(group, brand, () => selectBrand(directory.get(normalize(brand))));
+    for (const brand of brands) addFactory(group, directory.get(normalize(brand)));
 }
 search.addEventListener('input', () => {
     results.replaceChildren();
@@ -651,7 +676,7 @@ search.addEventListener('input', () => {
     let found = false;
     for (const [key, brand] of directory) {
         if (key.includes(query) || brand.points.some(point => normalize(point.address).includes(query))) {
-            addButton(results, brand.name, () => selectBrand(brand));
+            addFactory(results, brand);
             found = true;
         }
     }
@@ -681,15 +706,29 @@ function updatePreviews() {
     const value = name => orderForm.elements.namedItem(name).value.trim();
     if (previousDraftBrand !== brandInput.value) {
         previousDraftBrand = brandInput.value;
-        const addresses = [...new Set((directory.get(normalize(brandInput.value))?.points || []).map(point => point.email).filter(Boolean))];
-        document.getElementById('factory-emails').replaceChildren(...addresses.map(address => new Option(address,address)));
-        email.value = addresses.length === 1 ? addresses[0] : '';
+        const addresses = [...new Set((directory.get(normalize(brandInput.value))?.points || [])
+            .flatMap(point => (point.email || '').split(',').map(address => address.trim())).filter(Boolean))];
+        const list = document.getElementById('factory-emails');
+        list.replaceChildren();
+        for (const address of addresses) {
+            const label = document.createElement('label');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = address;
+            checkbox.checked = true;
+            checkbox.addEventListener('change', updatePreviews);
+            label.append(checkbox, address);
+            list.append(label);
+        }
+        if (brandInput.value && !addresses.length) list.textContent = 'Brak zapisanych adresów e-mail tej fabryki.';
+        email.value = '';
     }
     const referenceNumber = value('reference');
     const subject = 'Odbiór z fabryki ' + (brandInput.value || '—') + (referenceNumber ? ' · ' + referenceNumber : '');
     const common = [['Fabryka',brandInput.value],['Adres odbioru',value('pickup_address')],
         ['Numer dyspozycji',referenceNumber],['Data odbioru',value('pickup')]];
-    const shipment = [...common,['Adres dostawy',value('delivery_address')],['Data dostawy',value('delivery')],
+    const shipment = [['Odbiór z',value('pickup_address') || '—'],['Dostawa do',value('delivery_address') || '—'],
+        common[0],common[2],common[3],['Data dostawy',value('delivery')],
         ['Waga brutto',value('weight') && value('weight')+' kg'],['Liczba palet',value('pallets')],
         ['Uwagi',value('notes')]];
     const driver = [...common,...driverFields.map((field,index) => [['Kierowca','Telefon','Rejestracja'][index],field.value.trim()])];
@@ -697,10 +736,12 @@ function updatePreviews() {
     carrierPreview.value = compose('Proszę o odbiór i dostarczenie przesyłki.',shipment);
     factoryPreview.value = compose('Przekazuję dane kierowcy do odbioru przesyłki.',driver);
     const contact = carrierContacts[carrier.value];
-    const mailto = (address,body) => 'mailto:'+encodeURIComponent(address).replace(/%40/g,'@')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+    const mailto = (address,body) => 'mailto:'+address.split(',').map(item => encodeURIComponent(item).replace(/%40/g,'@')).join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
     draftLink('carrier-mail', contact?.email ? mailto(contact.email,carrierPreview.value) : '');
     draftLink('carrier-whatsapp', /^\d{8,15}$/.test(contact?.phone || '') ? 'https://wa.me/'+contact.phone+'?text='+encodeURIComponent(carrierPreview.value) : '');
-    draftLink('factory-mail', email.value.trim() && email.validity.valid ? mailto(email.value.trim(),factoryPreview.value) : '');
+    const recipients = Array.from(document.querySelectorAll('#factory-emails input:checked'), input => input.value);
+    if (email.value.trim() && email.validity.valid) recipients.push(...email.value.split(',').map(address => address.trim()));
+    draftLink('factory-mail', recipients.length && email.validity.valid ? mailto([...new Set(recipients)].join(','),factoryPreview.value) : '');
 }
 orderForm.addEventListener('input', updatePreviews);
 orderForm.addEventListener('change', updatePreviews);
