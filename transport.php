@@ -153,6 +153,19 @@ try {
                         ($kind === 'carrier' && $email === '' && $phone === '')) {
                         throw new InvalidArgumentException('Podaj poprawny e-mail lub numer WhatsApp z kodem kraju.');
                     }
+                    $pointId = $kind === 'factory' ? numberField('directory_id', 12, false, true) : null;
+                    if ($pointId !== null) {
+                        try {
+                            $query = $db->prepare("UPDATE jm_transport_directory SET name=?,country=?,address=?,email=? WHERE id=? AND kind='factory'");
+                            $query->execute([$name,$country,$address,$email,$pointId]);
+                        } catch (PDOException $exception) {
+                            if (($exception->errorInfo[1] ?? null) === 1062) {
+                                throw new InvalidArgumentException('Taki punkt odbioru już istnieje w kartotece.');
+                            }
+                            throw $exception;
+                        }
+                        break;
+                    }
                     $query = $db->prepare('INSERT INTO jm_transport_directory (kind,name,country,address,email,phone) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE email=?,phone=?');
                     $query->execute([$kind,$name,$country,$address,$email,$phone,$email,$phone]);
                     break;
@@ -399,6 +412,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .selected-carrier{background:#f6f6f6;padding:8px;line-height:1.6;overflow-wrap:anywhere}
 .shipment-photo{margin-top:8px;min-height:70px}#unload-directory form{display:grid;gap:5px;margin-top:6px}
 @media(max-width:600px){.shipment-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.employee-access{margin-top:8px}.employee-access .actions{gap:5px}
 </style>
 </head>
 <body>
@@ -421,9 +435,10 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <p id="factory-feedback" class="muted" role="status"></p>
 <?php if ($owner): ?>
 <details id="factory-entry">
-<summary>Dodaj punkt odbioru</summary>
+<summary>+ Dodaj fabrykę</summary>
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="factory">
+<input type="hidden" name="directory_id" id="directory-point-id">
 <label>Kraj<select name="country" required id="factory-country"><?php foreach (FACTORIES as $country => $names): ?><option><?=e($country)?></option><?php endforeach ?></select></label>
 <label>Fabryka<input id="directory-factory" name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
 <label>Adres odbioru<input id="directory-address" name="address" maxlength="300" required></label>
@@ -478,6 +493,18 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </details>
 <?php endif ?>
 </section>
+<?php if ($owner): ?>
+<details class="factory-menu employee-access">
+<summary>Dostęp pracowników</summary>
+<p>Dodaj adres Gmail lub Google Workspace pracownika. Po zalogowaniu pracownik zobaczy swoje zlecenia.</p>
+<form method="post" class="actions">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="access">
+<label>E-mail konta Google<input name="email" type="email" maxlength="254" required></label>
+<button name="access" value="enable">Włącz dostęp</button><button name="access" value="disable">Wyłącz dostęp</button>
+</form>
+<?php if ($employees): ?><ul><?php foreach ($employees as $employee): ?><li><?=e($employee['email'])?> · <?=$employee['active']?'Aktywny':'Wyłączony'?></li><?php endforeach ?></ul><?php endif ?>
+</details>
+<?php endif ?>
 </div>
 <div class="transport-content">
 <h1>Transport zewnętrzny</h1>
@@ -528,18 +555,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </details></div>
 </form>
 </section>
-<?php if ($owner): ?>
-<details>
-<summary>Dostęp pracowników</summary>
-<p>Dodaj adres Gmail lub Google Workspace pracownika. Po zalogowaniu pracownik zobaczy swoje zlecenia.</p>
-<form method="post" class="actions">
-<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="access">
-<label>E-mail konta Google<input name="email" type="email" maxlength="254" required></label>
-<button name="access" value="enable">Włącz dostęp</button><button name="access" value="disable">Wyłącz dostęp</button>
-</form>
-<?php if ($employees): ?><ul><?php foreach ($employees as $employee): ?><li><?=e($employee['email'])?> · <?=$employee['active']?'Aktywny':'Wyłączony'?></li><?php endforeach ?></ul><?php endif ?>
-</details>
-<?php endif ?>
+
 </div>
 <aside class="transport-messages" aria-label="Wiadomości transportowe">
 <section>
@@ -702,6 +718,31 @@ function addButton(container, label, action) {
 }
 const defaultTubadzin = 'Tubądzin Management Group, Cedrowice Parcela 11, 95-035 Ozorków';
 let expandedFactory;
+function openFactoryEntry(brand, point = null) {
+    const entry = document.getElementById('factory-entry');
+    entry.querySelector('form').reset();
+    document.getElementById('factory-photo-status').textContent = '';
+    document.getElementById('directory-point-id').value = point?.id ?? '';
+    country.value = point?.country ?? brand.country;
+    country.dispatchEvent(new Event('change'));
+    document.getElementById('directory-factory').value = point?.name ?? brand.name;
+    document.getElementById('directory-address').value = point?.address ?? '';
+    document.getElementById('directory-emails').value = point?.email ?? '';
+    entry.querySelector('summary').textContent = point ? 'Modyfikuj punkt odbioru' : '+ Dodaj fabrykę';
+    entry.open = true;
+    entry.scrollIntoView({block:'nearest'});
+    document.getElementById(point ? 'directory-factory' : 'directory-address').focus({preventScroll:true});
+}
+if (country) {
+    const entry = document.getElementById('factory-entry');
+    entry.addEventListener('toggle', () => {
+        if (entry.open) return;
+        entry.querySelector('form').reset();
+        document.getElementById('directory-point-id').value = '';
+        entry.querySelector('summary').textContent = '+ Dodaj fabrykę';
+        country.dispatchEvent(new Event('change'));
+    });
+}
 function addFactory(container, brand) {
     const group = document.createElement('div');
     const addresses = document.createElement('div');
@@ -723,21 +764,21 @@ function addFactory(container, brand) {
     });
     toggle.setAttribute('aria-expanded','false');
     if (country) {
-        const plus = addButton(row, '+', () => {
-            const factoryName = document.getElementById('directory-factory');
-            const address = document.getElementById('directory-address');
-            country.value = brand.country;
-            country.dispatchEvent(new Event('change'));
-            factoryName.value = brand.name;
-            address.closest('details').open = true;
-            address.closest('details').scrollIntoView({block:'nearest'});
-            address.focus({preventScroll:true});
-        });
+        const plus = addButton(row, '+', () => openFactoryEntry(brand));
         plus.className = 'factory-add';
         plus.setAttribute('aria-label','Dodaj adres odbioru: '+brand.name);
         plus.title = 'Dodaj adres odbioru';
     }
-    for (const point of brand.points) addButton(addresses, point.address, () => selectPoint(point));
+    for (const point of brand.points) {
+        const pointRow = document.createElement('div');
+        pointRow.className = 'factory-row';
+        addButton(pointRow, point.address, () => selectPoint(point));
+        if (country) {
+            const edit = addButton(pointRow, 'Modyfikuj', () => openFactoryEntry(brand, point));
+            edit.setAttribute('aria-label','Modyfikuj punkt odbioru: '+point.address);
+        }
+        addresses.append(pointRow);
+    }
     if (!brand.points.length && brand.name === 'Tubądzin') {
         addButton(addresses, defaultTubadzin, () => selectBrand(brand));
     } else if (!brand.points.length) {
@@ -804,11 +845,15 @@ function splitPickup() {
 }
 document.getElementById('split-pickup').addEventListener('click', splitPickup);
 
+const shortcutBrands = new Set(groups.flatMap(([, brands]) => brands.map(normalize)));
 for (const [, brands] of groups) {
     const group = document.createElement('div');
     group.className = 'factory-group';
     shortcuts.append(group);
     for (const brand of brands) addFactory(group, directory.get(normalize(brand)));
+}
+for (const [key, brand] of directory) {
+    if (brand.points.length && !shortcutBrands.has(key)) addFactory(shortcuts, brand);
 }
 search.addEventListener('input', () => {
     results.replaceChildren();
