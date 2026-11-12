@@ -311,8 +311,8 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 .transport-content,.transport-messages,.transport-sidebar{min-width:0}.transport-content{grid-column:2;grid-row:1}.transport-sidebar{grid-column:1;grid-row:1}.transport-messages{grid-column:3;grid-row:1}.transport-history{grid-column:2/-1;min-width:0}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:14px;padding:20px;margin:0 0 16px}
 .factory-menu{position:sticky;top:12px;background:white;border:1px solid #d8e1dc;border-radius:14px;padding:14px}
 .factory-menu h2{font-size:18px}.factory-group{display:grid;gap:5px;margin-bottom:16px}
-.factory-menu button{width:100%;text-align:left;background:#edf4ef;color:#19533e;overflow-wrap:anywhere}
-.factory-menu button:hover,.factory-menu button[aria-pressed=true]{background:#19533e;color:white}
+.factory-menu button{width:100%;text-align:left;background:#f1f2f3;color:#293238;overflow-wrap:anywhere}
+.factory-menu button:hover,.factory-menu button[aria-pressed=true]{background:#e0e3e6;color:#20282d}
 #factory-results{display:grid;gap:5px;margin-top:8px}#factory-feedback{overflow-wrap:anywhere}
 main{max-width:1600px}
 .transport-history[hidden]{display:none}.transport-sidebar>a{display:block;margin-bottom:12px;text-align:center}
@@ -326,6 +326,10 @@ main{max-width:1600px}
 .factory-addresses button{font-size:13px}.factory-recipients{display:grid;gap:6px;margin-bottom:8px}
 .factory-recipients label{display:flex;align-items:center;gap:6px;padding:5px 8px;overflow-wrap:anywhere}
 .factory-recipients label:has(:checked){background:#e1f1e8;border-radius:6px}
+.factory-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
+.factory-row .factory-add{width:36px;text-align:center;font-size:20px;padding:4px}
+.shipment-step{border:1px solid #dce0e3;border-radius:10px;padding:12px}
+.transport-messages .actions [aria-disabled=true]{opacity:.55;cursor:default}
 </style>
 </head>
 <body>
@@ -358,7 +362,7 @@ main{max-width:1600px}
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="create">
 <input type="hidden" name="request" value="<?=e(bin2hex(random_bytes(16)))?>">
-<div class="pickup-block">
+<div class="pickup-block shipment-step">
 <h3 id="pickup-title">Punkt odbioru</h3>
 <input type="hidden" id="pickup-brand" name="pickup_brand" value="<?=previous('pickup_brand')?>">
 <input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
@@ -369,14 +373,22 @@ main{max-width:1600px}
 <div><button type="button" id="split-pickup">Rozdziel adres i numer</button></div>
 <p id="pickup-message" class="muted" role="status"></p>
 </details>
-<h3>Dyspozycja</h3>
-<label>Numer dyspozycji do odbioru<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
 </div>
-<div class="pickup-block">
+<div class="pickup-block shipment-step">
+<h3>Dyspozycja i parametry odbioru</h3>
+<label>Numer dyspozycji do odbioru<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
+<div class="grid">
+<label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>" required></label>
+<label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>" required></label>
+<label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>" required></label>
+</div>
+</div>
+<div class="pickup-block shipment-step">
 <h3>Miejsce dostarczenia</h3>
+<label>Data dostawy<input type="date" name="delivery" value="<?=previous('delivery')?>" required></label>
 <label>Adres dostawy<input name="delivery_address" maxlength="300" value="<?=previous('delivery_address') ?: 'JURKO, Al. Jerozolimskie 229, 02-495 Warszawa'?>" required></label>
 </div>
-<div class="pickup-block">
+<div class="pickup-block shipment-step">
 <h3>Przewoźnik</h3>
 <div id="carrier-recommendations"></div>
 <label>Przewoźnik<select name="carrier" required id="order-carrier"><option value="">Wybierz przewoźnika</option><?php foreach ($carriers as $item): ?><option value="<?=e($item['id'])?>" <?=previous('carrier')===(string)$item['id']?'selected':''?>><?=e($item['name'])?></option><?php endforeach ?></select></label>
@@ -384,10 +396,6 @@ main{max-width:1600px}
 </div>
 <div class="grid">
 <label>Spółka<select name="company"><?php foreach (COMPANIES as $id => $name): ?><option value="<?=e($id)?>" <?=previous('company')===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
-<label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>" required></label>
-<label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>" required></label>
-<label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>" required></label>
-<label>Data dostawy<input type="date" name="delivery" value="<?=previous('delivery')?>" required></label>
 <label>Uzgodniona cena netto<input name="agreed" inputmode="decimal" value="<?=previous('agreed')?>"></label>
 <label>Waluta<select name="currency"><option>PLN</option><option <?=previous('currency')==='EUR'?'selected':''?>>EUR</option></select></label>
 </div>
@@ -439,7 +447,8 @@ main{max-width:1600px}
 <section>
 <h2>Zlecenie do przewoźnika</h2>
 <label>Treść wiadomości<textarea id="carrier-preview" rows="9" readonly></textarea></label>
-<div class="actions"><a id="carrier-mail" hidden>E-mail</a><a id="carrier-whatsapp" hidden target="_blank" rel="noopener noreferrer">WhatsApp</a></div>
+<div class="actions"><a class="button" id="carrier-mail" aria-disabled="true">E-mail</a><a class="button" id="carrier-whatsapp" aria-disabled="true" target="_blank" rel="noopener noreferrer">WhatsApp</a><a class="button" id="carrier-sms" aria-disabled="true">SMS</a></div>
+<p id="carrier-channel-status" class="muted" role="status"></p>
 </section>
 <section>
 <h2>Dane kierowcy do fabryki</h2>
@@ -600,7 +609,10 @@ function addFactory(container, brand) {
     const addresses = document.createElement('div');
     addresses.className = 'factory-addresses';
     addresses.hidden = true;
-    const toggle = addButton(group, brand.name, () => {
+    const row = document.createElement('div');
+    row.className = 'factory-row';
+    group.append(row);
+    const toggle = addButton(row, brand.name, () => {
         const wasOpen = !addresses.hidden;
         if (expandedFactory) {
             expandedFactory.addresses.hidden = true;
@@ -613,6 +625,21 @@ function addFactory(container, brand) {
         selectBrand(brand);
     });
     toggle.setAttribute('aria-expanded','false');
+    if (country) {
+        const plus = addButton(row, '+', () => {
+            const factoryName = document.getElementById('directory-factory');
+            const address = document.getElementById('directory-address');
+            country.value = brand.country;
+            country.dispatchEvent(new Event('change'));
+            factoryName.value = brand.name;
+            address.closest('details').open = true;
+            address.scrollIntoView({block:'center'});
+            address.focus({preventScroll:true});
+        });
+        plus.className = 'factory-add';
+        plus.setAttribute('aria-label','Dodaj adres odbioru: '+brand.name);
+        plus.title = 'Dodaj adres odbioru';
+    }
     for (const point of brand.points) addButton(addresses, point.address, () => selectPoint(point));
     if (!brand.points.length && brand.name === 'Tubądzin') {
         addButton(addresses, defaultTubadzin, () => selectBrand(brand));
@@ -698,7 +725,8 @@ let previousDraftBrand = null;
 const driverFields = ['driver-name','driver-phone','driver-plate'].map(id => document.getElementById(id));
 function draftLink(id, url) {
     const link = document.getElementById(id);
-    link.hidden = !url;
+    if (id.startsWith('carrier-')) link.setAttribute('aria-disabled', String(!url));
+    else link.hidden = !url;
     if (url) link.href = url;
     else link.removeAttribute('href');
 }
@@ -737,8 +765,19 @@ function updatePreviews() {
     factoryPreview.value = compose('Przekazuję dane kierowcy do odbioru przesyłki.',driver);
     const contact = carrierContacts[carrier.value];
     const mailto = (address,body) => 'mailto:'+address.split(',').map(item => encodeURIComponent(item).replace(/%40/g,'@')).join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-    draftLink('carrier-mail', contact?.email ? mailto(contact.email,carrierPreview.value) : '');
-    draftLink('carrier-whatsapp', /^\d{8,15}$/.test(contact?.phone || '') ? 'https://wa.me/'+contact.phone+'?text='+encodeURIComponent(carrierPreview.value) : '');
+    const hasRoute = Boolean(value('pickup_address') && value('delivery_address'));
+    const phone = /^\d{8,15}$/.test(contact?.phone || '') ? contact.phone : '';
+    const body = encodeURIComponent(carrierPreview.value);
+    draftLink('carrier-mail', hasRoute && contact?.email ? mailto(contact.email,carrierPreview.value) : '');
+    draftLink('carrier-whatsapp', hasRoute && phone ? 'https://wa.me/'+phone+'?text='+body : '');
+    const smsSeparator = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?';
+    draftLink('carrier-sms', hasRoute && phone ? 'sms:+'+phone+smsSeparator+'body='+body : '');
+    const channelStatus = document.getElementById('carrier-channel-status');
+    channelStatus.textContent = !contact ? 'Wybierz przewoźnika w formularzu.'
+        : !hasRoute ? 'Uzupełnij adres odbioru i dostawy.'
+        : !phone && !contact.email ? 'Uzupełnij kontakt przewoźnika w kartotece.'
+        : !phone ? 'WhatsApp i SMS wymagają numeru telefonu przewoźnika.'
+        : !contact.email ? 'E-mail wymaga adresu przewoźnika w kartotece.' : '';
     const recipients = Array.from(document.querySelectorAll('#factory-emails input:checked'), input => input.value);
     if (email.value.trim() && email.validity.valid) recipients.push(...email.value.split(',').map(address => address.trim()));
     draftLink('factory-mail', recipients.length && email.validity.valid ? mailto([...new Set(recipients)].join(','),factoryPreview.value) : '');
