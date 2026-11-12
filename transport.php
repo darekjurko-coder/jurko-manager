@@ -370,7 +370,7 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 .notice{padding:12px;background:#e1f1e8;border-radius:8px}.error{background:#fce4e1}.muted,small{color:#4b6155}
 .check{display:flex;align-items:center;gap:8px}nav form{margin:0}
 .transport-layout{display:grid;grid-template-columns:minmax(170px,.65fr) minmax(300px,1.4fr) minmax(240px,1fr);gap:9px;align-items:start}
-.transport-content,.transport-messages,.transport-sidebar{min-width:0}.transport-content{grid-column:2;grid-row:1}.transport-sidebar{grid-column:1;grid-row:1}.transport-messages{grid-column:3;grid-row:1}.transport-history{grid-column:2/-1;min-width:0}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:8px;padding:10px;margin:0 0 9px}
+.transport-content,.transport-messages,.transport-sidebar{min-width:0}.transport-content{grid-column:2;grid-row:1}.transport-sidebar{grid-column:1;grid-row:1}.transport-messages{grid-column:3;grid-row:1}.transport-history{grid-column:1/-1;min-width:0}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:8px;padding:10px;margin:0 0 9px}
 .factory-menu{position:sticky;top:12px;background:white;border:1px solid #d8e1dc;border-radius:8px;padding:8px}
 .factory-menu h2{font-size:14px}.factory-group{display:grid;gap:4px;margin-bottom:8px}
 .factory-menu button{width:100%;text-align:left;background:#f1f2f3;color:#293238;overflow-wrap:anywhere}
@@ -414,6 +414,8 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 @media(max-width:600px){.shipment-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .employee-access{margin-top:8px}.employee-access .actions{gap:5px}
 #factory-entry-handle{cursor:move;touch-action:none;user-select:none}#factory-entry-handle button{cursor:pointer}
+.transport-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-bottom:8px}
+.transport-heading h1{margin:0}.transport-heading .button{min-width:min(220px,100%);text-align:center;box-sizing:border-box}
 </style>
 </head>
 <body>
@@ -426,7 +428,6 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <main>
 <div class="transport-layout">
 <div class="transport-sidebar">
-<a class="button" href="#transport-history" id="open-history" aria-expanded="false">Wcześniejsze zlecenia</a>
 <aside class="factory-menu" aria-label="Fabryki">
 <div class="factory-heading"><h2>Fabryki</h2><?php if ($owner): ?><button type="button" id="add-factory" aria-label="Dodaj fabrykę" title="Dodaj fabrykę">+</button><?php endif ?></div>
 <div id="factory-shortcuts"></div>
@@ -508,7 +509,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <?php endif ?>
 </div>
 <div class="transport-content">
-<h1>Transport zewnętrzny</h1>
+<div class="transport-heading"><h1>Transport zewnętrzny</h1><a class="button" href="#transport-history" id="open-history" aria-expanded="false">Wcześniejsze zlecenia</a></div>
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
 <section id="new-order">
