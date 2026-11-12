@@ -295,47 +295,49 @@ function previous(string $key): string
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Transport zewnętrzny · JURKO Manager</title>
 <style nonce="<?=e($nonce)?>">
-*{box-sizing:border-box}body{margin:0;background:#f2f5f3;color:#182720;font:15px/1.5 system-ui,sans-serif}
-header{background:#142a22;color:white}nav,main{max-width:1220px;margin:auto;padding:18px 24px}
+*{box-sizing:border-box}body{margin:0;background:#f2f5f3;color:#182720;font:12px/1.35 system-ui,sans-serif}
+header{background:#142a22;color:white}nav,main{max-width:1220px;margin:auto;padding:10px 14px}
 nav{display:flex;align-items:center;justify-content:space-between;gap:16px}nav a{color:#d7eee0}
-h1{font-size:clamp(30px,5vw,46px);letter-spacing:-.04em;margin:16px 0}h2{margin:0 0 12px}
-section,main>details{background:white;border:1px solid #d8e1dc;border-radius:14px;padding:20px;margin:0 0 16px}
-summary{cursor:pointer;font-weight:700}details[open]>summary{margin-bottom:15px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:14px}
-label{display:grid;gap:4px;font-weight:600}input,select,textarea,button{font:inherit;padding:8px;border:1px solid #a7b7ad;border-radius:7px;min-width:0}
-textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0;background:#19533e;color:white;padding:9px 14px;border-radius:7px;font-weight:700;cursor:pointer;text-decoration:none}
-.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}.table{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e2e9e5;text-align:left;vertical-align:top}td details{min-width:200px}td form label{margin:6px 0}
+h1{font-size:clamp(18px,2vw,24px);letter-spacing:-.02em;margin:0 0 8px}h2{font-size:14px;margin:0 0 8px}h3{font-size:13px}
+section,main>details{background:white;border:1px solid #d8e1dc;border-radius:8px;padding:10px;margin:0 0 9px}
+summary{cursor:pointer;font-weight:700}details[open]>summary{margin-bottom:8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:7px}
+label{display:grid;gap:3px;font-weight:600}input,select,textarea,button{font:inherit;padding:4px 6px;border:1px solid #b9c7bd;border-radius:4px;min-width:0}
+textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0;background:#19533e;color:white;padding:5px 8px;border-radius:4px;font-weight:700;cursor:pointer;text-decoration:none}
+.actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px}.table{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:4px 6px;border:1px solid #d7e1da;text-align:left;vertical-align:top}thead th{background:#e3ede5;font-size:11px}tbody tr:nth-child(even){background:#f5f8f6}td details{min-width:125px}td form label{margin:4px 0}
 .notice{padding:12px;background:#e1f1e8;border-radius:8px}.error{background:#fce4e1}.muted,small{color:#4b6155}
 .check{display:flex;align-items:center;gap:8px}nav form{margin:0}
-.transport-layout{display:grid;grid-template-columns:minmax(170px,.65fr) minmax(300px,1.4fr) minmax(240px,1fr);gap:16px;align-items:start}
-.transport-content,.transport-messages,.transport-sidebar{min-width:0}.transport-content{grid-column:2;grid-row:1}.transport-sidebar{grid-column:1;grid-row:1}.transport-messages{grid-column:3;grid-row:1}.transport-history{grid-column:2/-1;min-width:0}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:14px;padding:20px;margin:0 0 16px}
-.factory-menu{position:sticky;top:12px;background:white;border:1px solid #d8e1dc;border-radius:14px;padding:14px}
-.factory-menu h2{font-size:18px}.factory-group{display:grid;gap:5px;margin-bottom:16px}
+.transport-layout{display:grid;grid-template-columns:minmax(170px,.65fr) minmax(300px,1.4fr) minmax(240px,1fr);gap:9px;align-items:start}
+.transport-content,.transport-messages,.transport-sidebar{min-width:0}.transport-content{grid-column:2;grid-row:1}.transport-sidebar{grid-column:1;grid-row:1}.transport-messages{grid-column:3;grid-row:1}.transport-history{grid-column:2/-1;min-width:0}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:8px;padding:10px;margin:0 0 9px}
+.factory-menu{position:sticky;top:12px;background:white;border:1px solid #d8e1dc;border-radius:8px;padding:8px}
+.factory-menu h2{font-size:14px}.factory-group{display:grid;gap:4px;margin-bottom:8px}
 .factory-menu button{width:100%;text-align:left;background:#f1f2f3;color:#293238;overflow-wrap:anywhere}
 .factory-menu button:hover,.factory-menu button[aria-pressed=true]{background:#e0e3e6;color:#20282d}
 #factory-results{display:grid;gap:5px;margin-top:8px}#factory-feedback{overflow-wrap:anywhere}
 main{max-width:1600px}
-.transport-history[hidden]{display:none}.transport-sidebar>a{display:block;margin-bottom:12px;text-align:center}
-.transport-messages textarea{font-size:14px}.transport-messages h2{font-size:17px}
+.transport-history[hidden]{display:none}.transport-sidebar>a{display:block;margin-bottom:7px;text-align:center}
+.transport-messages textarea{font-size:12px}.transport-messages h2{font-size:14px}
 @media(max-width:1050px){.transport-layout{grid-template-columns:170px minmax(0,1fr)}.transport-messages,.transport-history{grid-column:2;grid-row:auto}.factory-menu{position:static}}
 @media(max-width:600px){.transport-layout{display:block}.transport-sidebar,.transport-content,.transport-messages{margin-bottom:16px}}
 
-.pickup-block{display:grid;gap:10px;margin:0 0 18px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
-#carrier-recommendations{margin:8px 0 14px}#carrier-recommendations td{padding:5px 0}#carrier-recommendations button{padding:6px 8px}
+.pickup-block{display:grid;gap:6px;margin:0 0 8px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
+#carrier-recommendations{margin:3px 0 7px}#carrier-recommendations td{padding:5px 0}#carrier-recommendations button{padding:6px 8px}
 .factory-addresses{display:grid;gap:5px;margin:6px 0 9px 10px}.factory-addresses[hidden]{display:none}
-.factory-addresses button{font-size:13px}.factory-recipients{display:grid;gap:6px;margin-bottom:8px}
+.factory-addresses button{font-size:11px}.factory-recipients{display:grid;gap:6px;margin-bottom:8px}
 .factory-recipients label{display:flex;align-items:center;gap:6px;padding:5px 8px;overflow-wrap:anywhere}
 .factory-recipients label:has(:checked){background:#e1f1e8;border-radius:6px}
 .factory-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
-.factory-row .factory-add{width:36px;text-align:center;font-size:20px;padding:4px}
-.shipment-step{border:1px solid #dce0e3;border-radius:10px;padding:12px}
+.factory-row .factory-add{width:27px;text-align:center;font-size:15px;padding:2px}
+.shipment-step{border:1px solid #dce0e3;border-radius:6px;padding:7px}
 .transport-messages .actions [aria-disabled=true]{opacity:.55;cursor:default}
 .factory-menu{position:static}
 #factory-entry{border-top:1px solid #dce0e3;padding-top:10px}
-#factory-entry form{display:grid;gap:8px}
+#factory-entry form{display:grid;gap:5px}
 #factory-entry input,#factory-entry select{width:100%}
 #factory-entry form button{white-space:normal;text-align:center}
 #factory-photo-status:empty{display:none}
+p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .table{margin-top:7px}
+@media(max-width:600px){input,select,textarea{font-size:16px}button,.button{min-height:32px}}
 </style>
 </head>
 <body>
@@ -460,7 +462,7 @@ main{max-width:1600px}
 <aside class="transport-messages" aria-label="Wiadomości transportowe">
 <section>
 <h2>Zlecenie do przewoźnika</h2>
-<label>Treść wiadomości<textarea id="carrier-preview" rows="9" readonly></textarea></label>
+<label>Treść wiadomości<textarea id="carrier-preview" rows="6" readonly></textarea></label>
 <div class="actions"><a class="button" id="carrier-mail" aria-disabled="true">E-mail</a><a class="button" id="carrier-whatsapp" aria-disabled="true" target="_blank" rel="noopener noreferrer">WhatsApp</a><a class="button" id="carrier-sms" aria-disabled="true">SMS</a></div>
 <p id="carrier-channel-status" class="muted" role="status"></p>
 </section>
@@ -472,7 +474,7 @@ main{max-width:1600px}
 <label>Rejestracja pojazdu<input id="driver-plate" maxlength="24"></label>
 
 </div>
-<p><label>Treść wiadomości<textarea id="factory-preview" rows="7" readonly></textarea></label></p>
+<p><label>Treść wiadomości<textarea id="factory-preview" rows="5" readonly></textarea></label></p>
 <div id="factory-emails" class="factory-recipients"></div>
 <label>Dodatkowy e-mail do fabryki<input id="factory-email" type="email" multiple maxlength="254"></label>
 <a id="factory-mail" hidden>Otwórz e-mail do fabryki</a>
