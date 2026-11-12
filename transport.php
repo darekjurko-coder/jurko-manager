@@ -112,6 +112,7 @@ try {
         exit;
     }
     $error = '';
+    $redirect = $embedded ? '?panel=1' : '';
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (empty($_SESSION['csrf']) || !hash_equals($_SESSION['csrf'], field('csrf', 64))) {
             http_response_code(403);
@@ -139,10 +140,10 @@ try {
                     if (!$owner) {
                         throw new DomainException('Kartotekę edytuje właściciel.');
                     }
-                    $kind = choice('kind', ['factory','carrier']);
+                    $kind = choice('kind', ['factory','carrier','unload']);
                     $name = field('name', 150, true);
                     $country = $kind === 'factory' ? choice('country', array_keys(FACTORIES)) : '';
-                    $address = $kind === 'factory' ? field('address', 300, true) : '';
+                    $address = $kind !== 'carrier' ? field('address', 300, true) : '';
                     $email = field('email', 254);
                     $phone = $kind === 'carrier' ? preg_replace('/[ +()-]/', '', field('phone', 30)) : '';
                     $addresses = $kind === 'factory' ? array_map('trim', explode(',', $email)) : [$email];
@@ -192,7 +193,11 @@ try {
                         $factory = $db->lastInsertId();
                         $query = $db->prepare('INSERT INTO jm_transport_orders (account_id,factory_id,carrier_id,company,reference,delivery_address,pickup_date,delivery_date,pallets,weight_kg,agreed_net,currency,notes,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id');
                         $query->execute([$actor,$factory,$carrier,...$values]);
+                        $query = $db->prepare('SELECT id FROM jm_transport_orders WHERE account_id=? AND request_id=?');
+                        $query->execute([$actor,$request]);
+                        $savedOrder = $query->fetchColumn();
                         $db->commit();
+                        $redirect .= ($embedded ? '&' : '?').'history=1&order='.$savedOrder.'#order-'.$savedOrder;
                     } catch (Throwable $exception) {
                         $db->rollBack();
                         throw $exception;
@@ -228,12 +233,13 @@ try {
                         $query = $db->prepare('UPDATE jm_transport_orders SET status=?, goods_invoice=? WHERE id=? AND account_id=?');
                         $query->execute([$status,field('goods_invoice',150),$id,$actor]);
                     }
+                    $redirect .= ($embedded ? '&' : '?').'history=1&order='.$id.'#order-'.$id;
                     break;
                 default:
                     throw new InvalidArgumentException('Nieznana operacja.');
             }
             $_SESSION['transport_saved'] = true;
-            header('Location: /transport.php'.($embedded ? '?panel=1' : ''), true, 303);
+            header('Location: /transport.php'.$redirect, true, 303);
             exit;
         } catch (InvalidArgumentException $exception) {
             $error = $exception->getMessage();
@@ -244,6 +250,8 @@ try {
     $employees = $owner ? $db->query("SELECT email,active FROM jm_accounts WHERE role='employee' ORDER BY email")->fetchAll() : [];
     $directory = $db->query('SELECT * FROM jm_transport_directory ORDER BY country,name,address')->fetchAll();
     $factories = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'factory');
+    $unloads = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'unload');
+    $openOrder = is_string($_GET['order'] ?? null) && ctype_digit($_GET['order']) ? $_GET['order'] : '';
     $carriers = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'carrier');
     $sql = 'SELECT t.id,t.company,t.reference,t.delivery_address,t.pickup_date,t.delivery_date,
         t.pallets,t.weight_kg,t.agreed_net,t.actual_net,t.currency,t.notes,t.status,t.created_at,
@@ -341,6 +349,14 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 .carrier-directory{margin-top:8px}.carrier-directory form,.shipment-step details{display:grid;gap:5px}
 .carrier-directory input{width:100%}.carrier-names{margin:6px 0 0;padding-left:18px}
 [id$="-photo-status"]:empty,#pickup-message:empty{display:none}
+.shipment-header{display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:7px}
+.shipment-header>label{flex:0 1 52%}.shipment-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
+.directory-buttons{display:grid;gap:4px;margin:6px 0}
+.directory-buttons button{text-align:left;background:#f1f2f3;color:#293238;white-space:normal;overflow-wrap:anywhere}
+.directory-buttons button:hover{background:#e0e3e6}
+.selected-carrier{background:#f6f6f6;padding:8px;line-height:1.6;overflow-wrap:anywhere}
+.shipment-photo{margin-top:8px;min-height:70px}#unload-directory form{display:grid;gap:5px;margin-top:6px}
+@media(max-width:600px){.shipment-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -396,9 +412,12 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 </form>
 </details>
 <?php endif ?>
-<?php if ($carriers): ?>
-<ul class="carrier-names"><?php foreach ($carriers as $item): ?><li><?=e($item['name'])?></li><?php endforeach ?></ul>
-<?php endif ?>
+<details><summary>Wybierz przewoźnika</summary>
+<div class="directory-buttons">
+<?php foreach ($carriers as $item): ?><button type="button" data-carrier="<?=e($item['id'])?>"><?=e($item['name'])?></button><?php endforeach ?>
+<?php if (!$carriers): ?><p>Brak zapisanych przewoźników.</p><?php endif ?>
+</div>
+</details>
 </section>
 </div>
 <div class="transport-content">
@@ -406,51 +425,46 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
 <section id="new-order">
-<h2>Nowa przesyłka – fabryka</h2>
+<div class="shipment-header"><h2>Nowa przesyłka</h2><button type="submit" form="shipment-form">Zapisz zlecenie</button></div>
 
-<form method="post">
+<form method="post" id="shipment-form">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="create">
 <input type="hidden" name="request" value="<?=e(bin2hex(random_bytes(16)))?>">
 <div class="pickup-block shipment-step">
-<h3 id="pickup-title">Punkt odbioru</h3>
+<div class="shipment-header"><h3 id="pickup-title">Punkt odbioru</h3>
+<label>Adres dostawy<input id="delivery-address" name="delivery_address" maxlength="300" value="<?=previous('delivery_address') ?: 'JURKO, Al. Jerozolimskie 229, 02-495 Warszawa'?>" required></label>
+</div>
 <input type="hidden" id="pickup-brand" name="pickup_brand" value="<?=previous('pickup_brand')?>">
 <input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
-<label>Zapisany punkt odbioru<select name="factory" id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
+<label hidden>Zapisany punkt odbioru<select name="factory" id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
 <label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>" required></label>
 </div>
-<div class="pickup-block shipment-step">
-<h3>Dyspozycja</h3>
-<label>Numer dyspozycji do odbioru<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
-<div class="grid">
-<label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>" required></label>
+<div class="pickup-block shipment-step shipment-fields">
+<label>Dyspozycja<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
 <label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>" required></label>
+<label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>" required></label>
 <label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>" required></label>
-</div>
-<details><summary>Wklej zdjęcie lub tekst dyspozycji</summary>
-<label>Zdjęcie z danymi<input id="pickup-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
-<label>Wklej zdjęcie lub tekst<textarea id="pickup-paste" rows="3" maxlength="12000"></textarea></label>
-<button type="button" id="split-pickup">Uzupełnij pola z tekstu</button>
-<p id="pickup-message" class="muted" role="status"></p>
-</details>
-</div>
-<div class="pickup-block shipment-step">
-<h3>Miejsce dostarczenia</h3>
 <label>Data dostawy<input type="date" name="delivery" value="<?=previous('delivery')?>" required></label>
-<label>Adres dostawy<input name="delivery_address" maxlength="300" value="<?=previous('delivery_address') ?: 'JURKO, Al. Jerozolimskie 229, 02-495 Warszawa'?>" required></label>
 </div>
 <div class="pickup-block shipment-step">
 <h3>Przewoźnik</h3>
-<div id="carrier-recommendations"></div>
+<div id="selected-carrier" class="selected-carrier" hidden></div>
 <label>Przewoźnik<select name="carrier" required id="order-carrier"><option value="">Wybierz przewoźnika</option><?php foreach ($carriers as $item): ?><option value="<?=e($item['id'])?>" <?=previous('carrier')===(string)$item['id']?'selected':''?>><?=e($item['name'])?></option><?php endforeach ?></select></label>
 <?php if (!$carriers): ?><p class="muted">Dodaj przewoźnika w kartotece, aby zapisać zlecenie.</p><?php endif ?>
 </div>
-<div class="grid">
+<details class="shipment-step"><summary>Spółka, cena i uwagi</summary><div class="grid">
 <label>Spółka<select name="company"><?php foreach (COMPANIES as $id => $name): ?><option value="<?=e($id)?>" <?=previous('company')===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
 <label>Uzgodniona cena netto<input name="agreed" inputmode="decimal" value="<?=previous('agreed')?>"></label>
 <label>Waluta<select name="currency"><option>PLN</option><option <?=previous('currency')==='EUR'?'selected':''?>>EUR</option></select></label>
 </div>
 <p><label>Uwagi lub wklejone dane z fabryki<textarea name="notes" rows="3" maxlength="6000"><?=previous('notes')?></textarea></label></p>
-<button>Zapisz zlecenie</button>
+</details>
+<div class="pickup-block shipment-step shipment-photo"><details><summary>Wklej zdjęcie lub tekst dyspozycji</summary>
+<label>Zdjęcie z danymi<input id="pickup-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+<label>Wklej zdjęcie lub tekst<textarea id="pickup-paste" rows="3" maxlength="12000"></textarea></label>
+<button type="button" id="split-pickup">Uzupełnij pola z tekstu</button>
+<p id="pickup-message" class="muted" role="status"></p>
+</details></div>
 </form>
 </section>
 <?php if ($owner): ?>
@@ -486,6 +500,23 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
 <label>Dodatkowy e-mail do fabryki<input id="factory-email" type="email" multiple maxlength="254"></label>
 <a id="factory-mail" hidden>Otwórz e-mail do fabryki</a>
 </section>
+<section id="unload-directory">
+<h2>Punkt rozładunku</h2>
+<div class="directory-buttons">
+<button type="button" data-unload="JURKO, Al. Jerozolimskie 229, 02-495 Warszawa">JURKO · Al. Jerozolimskie 229</button>
+<?php foreach ($unloads as $item): ?><button type="button" data-unload="<?=e($item['address'])?>"><?=e($item['name'])?><br><small><?=e($item['address'])?></small></button><?php endforeach ?>
+</div>
+<?php if ($owner): ?>
+<details><summary>Dodaj punkt rozładunku</summary>
+<form method="post">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="unload">
+<label>Nazwa budowy lub punktu<input name="name" maxlength="150" required></label>
+<label>Adres rozładunku<input name="address" maxlength="300" required></label>
+<button>Zapisz punkt rozładunku</button>
+</form>
+</details>
+<?php endif ?>
+</section>
 </aside>
 <section class="transport-history" id="transport-history" <?=($search === '' && ($_GET['unbilled'] ?? '') !== '1' && !isset($_GET['history'])) ? 'hidden' : ''?>>
 <h2>Wcześniejsze zlecenia</h2>
@@ -507,12 +538,12 @@ p{margin:6px 0}.transport-messages textarea{min-height:92px}.transport-history .
         ($order['agreed_net'] !== null ? "\nUzgodniona stawka netto: ".$order['agreed_net'].' '.$order['currency'] : '').
         "\n\nProszę o potwierdzenie zlecenia i podanie numeru $number na fakturze.";
 ?>
-<tr>
-<td><strong><?=e($number)?></strong><br><?=e($order['reference'])?><br><small><?=e(COMPANIES[$order['company']])?><br><?=e($order['author'])?></small></td>
+<tr id="order-<?=e($order['id'])?>">
+<td><a href="<?=e('/transport.php?'.($embedded ? 'panel=1&' : '').'history=1&order='.$order['id'].'#order-'.$order['id'])?>"><?=e($number)?></a><br><?=e($order['reference'])?><br><small><?=e(COMPANIES[$order['company']])?><br><?=e($order['author'])?></small></td>
 <td><?=e($order['factory'])?><br><small><?=e($order['pickup_address'])?></small><br><?=e($order['carrier'])?></td>
 <td><?=e($order['pickup_date'])?><br><?=e($order['delivery_date'])?><br><small><?=e($order['delivery_address'])?><br><?=e($order['pallets'])?> pal. · <?=e($order['weight_kg'])?> kg</small><?php if ($order['notes'] !== ''): ?><details><summary>Uwagi</summary><?=nl2br(e($order['notes']))?></details><?php endif ?></td>
 <td>Uzgodniony <?=e($order['agreed_net'] === null ? '—' : $order['agreed_net'].' '.$order['currency'])?><br>Rozliczony <?=e($order['actual_net'] === null ? '—' : $order['actual_net'].' '.$order['currency'])?></td>
-<td><details><summary><?=e(STATUSES[$order['status']])?><?php if ($order['carrier_invoice'] !== ''): ?><br><small><?=e($order['carrier_invoice'])?></small><?php endif ?></summary>
+<td><details <?=$openOrder===(string)$order['id'] ? 'open' : ''?>><summary><?=e(STATUSES[$order['status']])?><?php if ($order['carrier_invoice'] !== ''): ?><br><small><?=e($order['carrier_invoice'])?></small><?php endif ?></summary>
 <form method="post" enctype="multipart/form-data"><input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?=e($order['id'])?>">
 <label>Status<select name="status"><?php foreach (STATUSES as $id => $name): ?><option value="<?=e($id)?>" <?=$order['status']===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
 <label>Faktura zakupu towaru<input name="goods_invoice" maxlength="150" value="<?=e($order['goods_invoice'])?>"></label>
@@ -567,7 +598,6 @@ for (const point of points) {
 const brandInput = document.getElementById('pickup-brand');
 const countryInput = document.getElementById('pickup-country');
 const pickupTitle = document.getElementById('pickup-title');
-const carrierList = document.getElementById('carrier-recommendations');
 const sidebarCarriers = document.getElementById('factory-top-carriers');
 function showBrand(brand) {
     brandInput.value = brand.name;
@@ -583,7 +613,7 @@ function showBrand(brand) {
     }
     const top = [...carrier.options].slice(1).filter(option => totals.has(option.value))
         .sort((a,b) => totals.get(b.value)-totals.get(a.value) || a.text.localeCompare(b.text,'pl')).slice(0,3);
-    for (const container of [carrierList, sidebarCarriers]) {
+    for (const container of [sidebarCarriers]) {
         container.replaceChildren();
         if (!top.length) {
             container.textContent = 'Ranking pojawi się po wysłaniu zleceń z tej fabryki.';
@@ -645,7 +675,6 @@ function addFactory(container, brand) {
         addresses.hidden = false;
         toggle.setAttribute('aria-expanded','true');
         expandedFactory = {addresses,toggle};
-        selectBrand(brand);
     });
     toggle.setAttribute('aria-expanded','false');
     if (country) {
@@ -667,7 +696,10 @@ function addFactory(container, brand) {
     if (!brand.points.length && brand.name === 'Tubądzin') {
         addButton(addresses, defaultTubadzin, () => selectBrand(brand));
     } else if (!brand.points.length) {
-        addresses.textContent = 'Brak zapisanych punktów odbioru.';
+        addButton(addresses, 'Wpisz adres ręcznie', () => {
+            selectBrand(brand);
+            orderAddress.focus();
+        });
     }
     group.append(addresses);
     container.append(group);
@@ -755,7 +787,38 @@ historyLink.addEventListener('click', () => {
     orderHistory.hidden = false;
     historyLink.setAttribute('aria-expanded','true');
 });
-const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','email','phone'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
+const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','name','address','email','phone'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
+const selectedCarrier = document.getElementById('selected-carrier');
+function showCarrier() {
+    const contact = carrierContacts[carrier.value];
+    selectedCarrier.hidden = !contact;
+    selectedCarrier.replaceChildren();
+    if (!contact) return;
+    const title = document.createElement('strong');
+    title.textContent = contact.name;
+    selectedCarrier.append(title);
+    for (const line of [contact.address, contact.email, contact.phone && '+'+contact.phone]) {
+        if (!line) continue;
+        const detail = document.createElement('div');
+        detail.textContent = line;
+        selectedCarrier.append(detail);
+    }
+}
+carrier.addEventListener('change', showCarrier);
+showCarrier();
+for (const button of document.querySelectorAll('[data-carrier]')) {
+    button.addEventListener('click', () => {
+        carrier.value = button.dataset.carrier;
+        carrier.dispatchEvent(new Event('change', {bubbles:true}));
+    });
+}
+const deliveryAddress = document.getElementById('delivery-address');
+for (const button of document.querySelectorAll('[data-unload]')) {
+    button.addEventListener('click', () => {
+        deliveryAddress.value = button.dataset.unload;
+        deliveryAddress.dispatchEvent(new Event('input', {bubbles:true}));
+    });
+}
 const carrierPreview = document.getElementById('carrier-preview');
 const factoryPreview = document.getElementById('factory-preview');
 const email = document.getElementById('factory-email');
