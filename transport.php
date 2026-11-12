@@ -285,6 +285,7 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <body>
 <header><nav>
 <?php if ($owner): ?><a href="/index.html">← JURKO Manager</a><?php elseif ($staff): ?><a href="/app/employee.php">← Mój panel</a><?php else: ?><strong>JURKO Manager</strong><?php endif ?>
+<?php if ($owner): ?><a href="/app/employee.php">Logowanie pracownika</a><a href="/app/employee.php?admin=1">Dostęp pracowników</a><?php endif ?>
 <form action="/auth/index.php?action=logout" method="post"><input type="hidden" name="csrf" value="<?=$csrf?>"><button>Wyloguj</button></form>
 </nav></header>
 <main>
