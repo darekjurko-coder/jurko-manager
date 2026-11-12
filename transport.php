@@ -154,12 +154,26 @@ try {
                     $query->execute([$kind,$name,$country,$address,$email,$phone,$email,$phone]);
                     break;
                 case 'create':
-                    $factory = numberField('factory', 10, true, true);
+                    $selectedPoint = numberField('factory', 10, false, true);
                     $carrier = numberField('carrier', 10, true, true);
-                    $query = $db->prepare("SELECT COUNT(*) FROM jm_transport_directory WHERE (id=? AND kind='factory') OR (id=? AND kind='carrier')");
-                    $query->execute([$factory,$carrier]);
-                    if ((int)$query->fetchColumn() !== 2) {
-                        throw new InvalidArgumentException('Wybierz fabrykę i przewoźnika z kartoteki.');
+                    $address = field('pickup_address', 300, true);
+                    $query = $db->prepare("SELECT id FROM jm_transport_directory WHERE id=? AND kind='carrier'");
+                    $query->execute([$carrier]);
+                    if (!$query->fetchColumn()) {
+                        throw new InvalidArgumentException('Wybierz przewoźnika z kartoteki.');
+                    }
+                    if ($selectedPoint !== null) {
+                        $query = $db->prepare("SELECT name,country FROM jm_transport_directory WHERE id=? AND kind='factory'");
+                        $query->execute([$selectedPoint]);
+                        $brand = $query->fetch();
+                        if (!$brand) {
+                            throw new InvalidArgumentException('Wybierz punkt odbioru z kartoteki.');
+                        }
+                        $name = $brand['name'];
+                        $country = $brand['country'];
+                    } else {
+                        $country = choice('pickup_country', array_keys(FACTORIES));
+                        $name = choice('pickup_brand', FACTORIES[$country]);
                     }
                     $pickup = transportDate('pickup');
                     $delivery = transportDate('delivery');
@@ -167,10 +181,21 @@ try {
                     if ($delivery < $pickup || !preg_match('/^[a-f0-9]{32}$/D', $request)) {
                         throw new InvalidArgumentException('Sprawdź datę dostawy i odśwież formularz.');
                     }
-                    $query = $db->prepare('INSERT INTO jm_transport_orders (account_id,factory_id,carrier_id,company,reference,delivery_address,pickup_date,delivery_date,pallets,weight_kg,agreed_net,currency,notes,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id');
-                    $query->execute([$actor,$factory,$carrier,choice('company',array_keys(COMPANIES)),field('reference',150,true),
+                    $values = [choice('company',array_keys(COMPANIES)),field('reference',150,true),
                         field('delivery_address',300,true),$pickup,$delivery,numberField('pallets',6,true,true),
-                        numberField('weight',8,true),numberField('agreed',10),choice('currency',['PLN','EUR']),field('notes',6000),$request]);
+                        numberField('weight',8,true),numberField('agreed',10),choice('currency',['PLN','EUR']),field('notes',6000),$request];
+                    $db->beginTransaction();
+                    try {
+                        $query = $db->prepare("INSERT INTO jm_transport_directory (kind,name,country,address) VALUES ('factory',?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
+                        $query->execute([$name,$country,$address]);
+                        $factory = $db->lastInsertId();
+                        $query = $db->prepare('INSERT INTO jm_transport_orders (account_id,factory_id,carrier_id,company,reference,delivery_address,pickup_date,delivery_date,pallets,weight_kg,agreed_net,currency,notes,request_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id');
+                        $query->execute([$actor,$factory,$carrier,...$values]);
+                        $db->commit();
+                    } catch (Throwable $exception) {
+                        $db->rollBack();
+                        throw $exception;
+                    }
                     break;
                 case 'status':
                     $id = numberField('id', 12, true, true);
@@ -281,14 +306,16 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}.table{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e2e9e5;text-align:left;vertical-align:top}td details{min-width:200px}td form label{margin:6px 0}
 .notice{padding:12px;background:#e1f1e8;border-radius:8px}.error{background:#fce4e1}.muted,small{color:#4b6155}
 .check{display:flex;align-items:center;gap:8px}nav form{margin:0}
-.transport-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:16px;align-items:start}
-.transport-content{min-width:0}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:14px;padding:20px;margin:0 0 16px}
+.transport-layout{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:16px;align-items:start}
+.transport-content{min-width:0;grid-column:1;grid-row:1}.factory-menu{grid-column:2;grid-row:1}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:14px;padding:20px;margin:0 0 16px}
 .factory-menu{position:sticky;top:12px;background:white;border:1px solid #d8e1dc;border-radius:14px;padding:14px}
 .factory-menu h2{font-size:18px}.factory-group{display:grid;gap:5px;margin-bottom:16px}
 .factory-menu button{width:100%;text-align:left;background:#edf4ef;color:#19533e;overflow-wrap:anywhere}
 .factory-menu button:hover,.factory-menu button[aria-pressed=true]{background:#19533e;color:white}
 #factory-results{display:grid;gap:5px;margin-top:8px}#factory-feedback{overflow-wrap:anywhere}
-@media(max-width:740px){.transport-layout{grid-template-columns:minmax(0,1fr)}.factory-menu{position:static}}
+@media(max-width:740px){.transport-layout{grid-template-columns:minmax(0,1fr)}.factory-menu{position:static;grid-column:1;grid-row:1}.transport-content{grid-row:2}}
+.pickup-block{display:grid;gap:10px;margin:0 0 18px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
+#carrier-recommendations{margin:8px 0 14px}#carrier-recommendations td{padding:5px 0}#carrier-recommendations button{padding:6px 8px}
 </style>
 </head>
 <body>
@@ -305,12 +332,53 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <div id="factory-shortcuts"></div>
 <label>Szukaj fabryki<input id="factory-search" type="search" placeholder="Nazwa lub adres"></label>
 <div id="factory-results"></div>
+<div id="factory-top-carriers"></div>
 <p id="factory-feedback" class="muted" role="status"></p>
 </aside>
 <div class="transport-content">
 <h1>Transport zewnętrzny</h1>
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
+<section id="new-order">
+<h2>Nowe zlecenie</h2>
+
+<form method="post">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="create">
+<input type="hidden" name="request" value="<?=e(bin2hex(random_bytes(16)))?>">
+<div class="pickup-block">
+<h3 id="pickup-title">Punkt odbioru</h3>
+<input type="hidden" id="pickup-brand" name="pickup_brand" value="<?=previous('pickup_brand')?>">
+<input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
+<label>Zapisany punkt odbioru<select name="factory" id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
+<label>Wklej dyspozycję z fabryki<textarea id="pickup-paste" rows="3" maxlength="6000" placeholder="Adres odbioru i numer dyspozycji"></textarea></label>
+<div><button type="button" id="split-pickup">Rozdziel adres i numer</button></div>
+<p id="pickup-message" class="muted" role="status"></p>
+<label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>" required></label>
+<label>Numer dyspozycji do odbioru<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
+</div>
+<div class="pickup-block">
+<h3>Miejsce dostarczenia</h3>
+<label>Adres dostawy<input name="delivery_address" maxlength="300" value="<?=previous('delivery_address') ?: 'JURKO, Al. Jerozolimskie 229, 02-495 Warszawa'?>" required></label>
+</div>
+<div class="pickup-block">
+<h3>Przewoźnik</h3>
+<div id="carrier-recommendations"></div>
+<label>Przewoźnik<select name="carrier" required id="order-carrier"><option value="">Wybierz przewoźnika</option><?php foreach ($carriers as $item): ?><option value="<?=e($item['id'])?>" <?=previous('carrier')===(string)$item['id']?'selected':''?>><?=e($item['name'])?></option><?php endforeach ?></select></label>
+<?php if (!$carriers): ?><p class="muted">Dodaj przewoźnika w kartotece, aby zapisać zlecenie.</p><?php endif ?>
+</div>
+<div class="grid">
+<label>Spółka<select name="company"><?php foreach (COMPANIES as $id => $name): ?><option value="<?=e($id)?>" <?=previous('company')===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
+<label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>" required></label>
+<label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>" required></label>
+<label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>" required></label>
+<label>Data dostawy<input type="date" name="delivery" value="<?=previous('delivery')?>" required></label>
+<label>Uzgodniona cena netto<input name="agreed" inputmode="decimal" value="<?=previous('agreed')?>"></label>
+<label>Waluta<select name="currency"><option>PLN</option><option <?=previous('currency')==='EUR'?'selected':''?>>EUR</option></select></label>
+</div>
+<p><label>Uwagi lub wklejone dane z fabryki<textarea name="notes" rows="3" maxlength="6000"><?=previous('notes')?></textarea></label></p>
+<button>Zapisz zlecenie</button>
+</form>
+</section>
 <?php if ($owner): ?>
 <details>
 <summary>Dostęp pracowników</summary>
@@ -349,31 +417,6 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 </tbody></table></div>
 </details>
 <?php endif ?>
-<section id="new-order">
-<h2>Nowe zlecenie</h2>
-<?php if (!$factories || !$carriers): ?><p>Do wystawienia zlecenia potrzebny jest punkt odbioru i przewoźnik w kartotece.</p><?php else: ?>
-<form method="post">
-<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="create">
-<input type="hidden" name="request" value="<?=e(bin2hex(random_bytes(16)))?>">
-<div class="grid">
-<label>Spółka<select name="company"><?php foreach (COMPANIES as $id => $name): ?><option value="<?=e($id)?>" <?=previous('company')===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
-<label>Fabryka i punkt odbioru<select name="factory" required id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
-<label>Adres odbioru<input id="order-address" readonly></label>
-<label>Przewoźnik<select name="carrier" required id="order-carrier"><option value="">Wybierz przewoźnika</option><?php foreach ($carriers as $item): ?><option value="<?=e($item['id'])?>" <?=previous('carrier')===(string)$item['id']?'selected':''?>><?=e($item['name'])?></option><?php endforeach ?></select></label>
-<label>Numer zamówienia lub referencja odbioru<input name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
-<label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>" required></label>
-<label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>" required></label>
-<label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>" required></label>
-<label>Data dostawy<input type="date" name="delivery" value="<?=previous('delivery')?>" required></label>
-<label>Adres dostawy<input name="delivery_address" maxlength="300" value="<?=previous('delivery_address')?>" required></label>
-<label>Uzgodniona cena netto<input name="agreed" inputmode="decimal" value="<?=previous('agreed')?>"></label>
-<label>Waluta<select name="currency"><option>PLN</option><option <?=previous('currency')==='EUR'?'selected':''?>>EUR</option></select></label>
-</div>
-<p><label>Uwagi lub wklejone dane z fabryki<textarea name="notes" rows="3" maxlength="6000"><?=previous('notes')?></textarea></label></p>
-<button>Zapisz zlecenie</button>
-</form>
-<?php endif ?>
-</section>
 <section>
 <h2>Zlecenia transportowe</h2>
 <form method="get" class="actions">
@@ -434,27 +477,11 @@ if (country) {
 const factory = document.getElementById('order-factory');
 const carrier = document.getElementById('order-carrier');
 const usage = <?=json_encode($usage, JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
-if (factory && carrier) {
-    const sortCarriers = () => {
-        const selected = carrier.value;
-        const counts = new Map(usage.filter(row => String(row.factory_id) === factory.value)
-            .map(row => [String(row.carrier_id), Number(row.uses)]));
-        const options = Array.from(carrier.options).slice(1);
-        options.sort((a,b) => (counts.get(b.value) || 0) - (counts.get(a.value) || 0)
-            || a.text.localeCompare(b.text,'pl'));
-        carrier.replaceChildren(carrier.options[0], ...options);
-        carrier.value = selected;
-    };
-    factory.addEventListener('change', sortCarriers);
-    sortCarriers();
-}
 const shortcuts = document.getElementById('factory-shortcuts');
 const search = document.getElementById('factory-search');
 const results = document.getElementById('factory-results');
 const feedback = document.getElementById('factory-feedback');
 const orderAddress = document.getElementById('order-address');
-const directoryName = document.getElementById('directory-factory');
-const directoryAddress = document.getElementById('directory-address');
 const points = <?=json_encode(array_values(array_map(static fn(array $row): array => array_intersect_key($row, array_flip(['id','name','country','address'])), $factories)), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 const normalize = value => value.toLocaleLowerCase('pl').replace(/ł/g,'l').normalize('NFD').replace(/\p{M}/gu,'').replace(/[^a-z0-9]+/g,'');
 const groups = [['Polska',['Tubądzin','Paradyż','Cerrad']],['Włochy',['Novabell','Italgraniti']]];
@@ -467,25 +494,58 @@ for (const point of points) {
     if (!directory.has(key)) directory.set(key, {name:point.name, country:point.country, points:[]});
     directory.get(key).points.push(point);
 }
-function updateAddress() {
-    if (orderAddress) orderAddress.value = factory.selectedOptions[0]?.dataset.address || '';
+const brandInput = document.getElementById('pickup-brand');
+const countryInput = document.getElementById('pickup-country');
+const pickupTitle = document.getElementById('pickup-title');
+const carrierList = document.getElementById('carrier-recommendations');
+const sidebarCarriers = document.getElementById('factory-top-carriers');
+function showBrand(brand) {
+    brandInput.value = brand.name;
+    countryInput.value = brand.country;
+    pickupTitle.textContent = 'Punkt odbioru · ' + brand.name;
+    const ids = new Set(brand.points.map(point => String(point.id)));
+    const totals = new Map();
+    for (const row of usage) {
+        if (ids.has(String(row.factory_id))) {
+            const id = String(row.carrier_id);
+            totals.set(id, (totals.get(id) || 0) + Number(row.uses));
+        }
+    }
+    const top = [...carrier.options].slice(1).filter(option => totals.has(option.value))
+        .sort((a,b) => totals.get(b.value)-totals.get(a.value) || a.text.localeCompare(b.text,'pl')).slice(0,3);
+    for (const container of [carrierList, sidebarCarriers]) {
+        container.replaceChildren();
+        if (!top.length) {
+            container.textContent = 'Ranking pojawi się po wysłaniu zleceń z tej fabryki.';
+            continue;
+        }
+        const table = document.createElement('table');
+        const caption = table.createCaption();
+        caption.textContent = 'Najczęstsi przewoźnicy · ' + brand.name;
+        for (const option of top) {
+            const row = table.insertRow();
+            addButton(row.insertCell(), option.text, () => { carrier.value = option.value; });
+            row.insertCell().textContent = totals.get(option.value);
+        }
+        container.append(table);
+    }
 }
-factory?.addEventListener('change', updateAddress);
-updateAddress();
 function selectPoint(point) {
-    if (factory) {
-        factory.value = String(point.id);
-        factory.dispatchEvent(new Event('change'));
-        document.getElementById('new-order').scrollIntoView({block:'start'});
-    }
-    if (directoryName) {
-        country.value = point.country;
-        country.dispatchEvent(new Event('change'));
-        directoryName.value = point.name;
-        directoryAddress.value = point.address;
-    }
+    factory.value = String(point.id);
+    factory.dispatchEvent(new Event('change'));
     feedback.textContent = point.address;
+    orderAddress.focus({preventScroll:true});
+    document.getElementById('new-order').scrollIntoView({block:'start'});
 }
+factory.addEventListener('change', () => {
+    const point = points.find(item => String(item.id) === factory.value);
+    if (!point) return;
+    orderAddress.value = point.address;
+    showBrand(directory.get(normalize(point.name)));
+});
+const initialPoint = points.find(item => String(item.id) === factory.value);
+const initialBrand = directory.get(normalize(initialPoint?.name || brandInput.value));
+if (initialBrand) showBrand(initialBrand);
 function addButton(container, label, action) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -495,27 +555,45 @@ function addButton(container, label, action) {
 }
 function selectBrand(brand) {
     results.replaceChildren();
+    showBrand(brand);
     if (brand.points.length === 1) {
         selectPoint(brand.points[0]);
-    } else if (brand.points.length > 1) {
+        return;
+    }
+    factory.value = '';
+    orderAddress.value = '';
+    document.getElementById('new-order').scrollIntoView({block:'start'});
+    if (brand.points.length > 1) {
         feedback.textContent = 'Wybierz punkt odbioru dla ' + brand.name + '.';
         for (const point of brand.points) addButton(results, point.address, () => selectPoint(point));
+        results.querySelector('button').focus({preventScroll:true});
     } else {
-        if (factory) {
-            factory.value = '';
-            factory.dispatchEvent(new Event('change'));
-        }
-        if (directoryName) {
-            country.value = brand.country;
-            country.dispatchEvent(new Event('change'));
-            directoryName.value = brand.name;
-            directoryAddress.value = '';
-            directoryName.closest('details').open = true;
-            directoryAddress.focus();
-        }
-        feedback.textContent = 'Brak zapisanego adresu odbioru dla ' + brand.name + '.';
+        feedback.textContent = 'Wklej dyspozycję lub wpisz adres odbioru.';
+        document.getElementById('pickup-paste').focus({preventScroll:true});
     }
 }
+const paste = document.getElementById('pickup-paste');
+const reference = document.getElementById('pickup-reference');
+const message = document.getElementById('pickup-message');
+function splitPickup() {
+    const raw = paste.value.trim();
+    if (!raw) { message.textContent = 'Wklej dyspozycję z fabryki.'; return; }
+    const marker = /\b(?:(?:nr|numer)\.?\s+(?:dyspozycji|odbioru|awizacji|zamówienia)|dyspozycja(?:\s+do\s+odbioru)?|referencja(?:\s+odbioru)?|pickup\s+(?:reference|number))\s*(?:nr\.?\s*)?[:#–-]?\s*([\p{L}\d][\p{L}\d._/-]*)/iu;
+    const found = raw.match(marker);
+    const lines = raw.replace(marker, '').split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    const label = /(?:adres(?:\s+punktu)?\s+(?:odbioru|załadunku)|punkt odbioru|miejsce załadunku)\s*:/iu;
+    const addressStart = lines.findIndex(line => label.test(line));
+    const addressLines = addressStart >= 0 ? lines.slice(addressStart, addressStart + 3) : lines;
+    const address = addressLines.map(line => line.replace(label,'').trim()).filter(Boolean).join(', ');
+    const looksLikeAddress = /\d{2}-\d{3}|\b\d{5}\b|\b(?:ul\.|via\s|al\.|strada\s)/iu.test(address);
+    if (found) reference.value = found[1];
+    if (looksLikeAddress && address.length <= 300) orderAddress.value = address;
+    message.textContent = found && looksLikeAddress && address.length <= 300
+        ? 'Uzupełniono adres i numer. Sprawdź oba pola przed zapisaniem.'
+        : 'Sprawdź pola i uzupełnij dane, których nie udało się odczytać.';
+}
+document.getElementById('split-pickup').addEventListener('click', splitPickup);
+paste.addEventListener('paste', () => requestAnimationFrame(splitPickup));
 for (const [, brands] of groups) {
     const group = document.createElement('div');
     group.className = 'factory-group';
