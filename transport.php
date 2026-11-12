@@ -281,6 +281,14 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}.table{overflow:auto}table{width:100%;border-collapse:collapse}th,td{padding:10px;border-bottom:1px solid #e2e9e5;text-align:left;vertical-align:top}td details{min-width:200px}td form label{margin:6px 0}
 .notice{padding:12px;background:#e1f1e8;border-radius:8px}.error{background:#fce4e1}.muted,small{color:#4b6155}
 .check{display:flex;align-items:center;gap:8px}nav form{margin:0}
+.transport-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:16px;align-items:start}
+.transport-content{min-width:0}.transport-content>details{background:white;border:1px solid #d8e1dc;border-radius:14px;padding:20px;margin:0 0 16px}
+.factory-menu{position:sticky;top:12px;background:white;border:1px solid #d8e1dc;border-radius:14px;padding:14px}
+.factory-menu h2{font-size:18px}.factory-group{display:grid;gap:5px;margin-bottom:16px}
+.factory-menu button{width:100%;text-align:left;background:#edf4ef;color:#19533e;overflow-wrap:anywhere}
+.factory-menu button:hover,.factory-menu button[aria-pressed=true]{background:#19533e;color:white}
+#factory-results{display:grid;gap:5px;margin-top:8px}#factory-feedback{overflow-wrap:anywhere}
+@media(max-width:740px){.transport-layout{grid-template-columns:minmax(0,1fr)}.factory-menu{position:static}}
 </style>
 </head>
 <body>
@@ -291,6 +299,15 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 </nav></header>
 <?php endif ?>
 <main>
+<div class="transport-layout">
+<aside class="factory-menu" aria-label="Fabryki">
+<h2>Fabryki</h2>
+<div id="factory-shortcuts"></div>
+<label>Szukaj fabryki<input id="factory-search" type="search" placeholder="Nazwa lub adres"></label>
+<div id="factory-results"></div>
+<p id="factory-feedback" class="muted" role="status"></p>
+</aside>
+<div class="transport-content">
 <h1>Transport zewnętrzny</h1>
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
@@ -312,8 +329,8 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <h2>Punkt odbioru</h2>
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="factory">
 <label>Kraj<select name="country" required id="factory-country"><?php foreach (FACTORIES as $country => $names): ?><option><?=e($country)?></option><?php endforeach ?></select></label>
-<label>Fabryka<input name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
-<label>Adres odbioru<input name="address" maxlength="300" required></label>
+<label>Fabryka<input id="directory-factory" name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
+<label>Adres odbioru<input id="directory-address" name="address" maxlength="300" required></label>
 <p><button>Dodaj punkt odbioru</button></p>
 </form>
 <form method="post">
@@ -332,7 +349,7 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 </tbody></table></div>
 </details>
 <?php endif ?>
-<section>
+<section id="new-order">
 <h2>Nowe zlecenie</h2>
 <?php if (!$factories || !$carriers): ?><p>Do wystawienia zlecenia potrzebny jest punkt odbioru i przewoźnik w kartotece.</p><?php else: ?>
 <form method="post">
@@ -340,7 +357,8 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <input type="hidden" name="request" value="<?=e(bin2hex(random_bytes(16)))?>">
 <div class="grid">
 <label>Spółka<select name="company"><?php foreach (COMPANIES as $id => $name): ?><option value="<?=e($id)?>" <?=previous('company')===$id?'selected':''?>><?=e($name)?></option><?php endforeach ?></select></label>
-<label>Fabryka i punkt odbioru<select name="factory" required id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
+<label>Fabryka i punkt odbioru<select name="factory" required id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
+<label>Adres odbioru<input id="order-address" readonly></label>
 <label>Przewoźnik<select name="carrier" required id="order-carrier"><option value="">Wybierz przewoźnika</option><?php foreach ($carriers as $item): ?><option value="<?=e($item['id'])?>" <?=previous('carrier')===(string)$item['id']?'selected':''?>><?=e($item['name'])?></option><?php endforeach ?></select></label>
 <label>Numer zamówienia lub referencja odbioru<input name="reference" maxlength="150" value="<?=previous('reference')?>" required></label>
 <label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>" required></label>
@@ -398,6 +416,8 @@ textarea{width:100%;resize:vertical}button,.button{display:inline-block;border:0
 <p class="muted">Po wysłaniu wiadomości ustaw status „Wysłane”.</p>
 <?php endif ?>
 </section>
+</div>
+</div>
 </main>
 <script nonce="<?=e($nonce)?>">
 const country = document.getElementById('factory-country');
@@ -428,6 +448,94 @@ if (factory && carrier) {
     factory.addEventListener('change', sortCarriers);
     sortCarriers();
 }
+const shortcuts = document.getElementById('factory-shortcuts');
+const search = document.getElementById('factory-search');
+const results = document.getElementById('factory-results');
+const feedback = document.getElementById('factory-feedback');
+const orderAddress = document.getElementById('order-address');
+const directoryName = document.getElementById('directory-factory');
+const directoryAddress = document.getElementById('directory-address');
+const points = <?=json_encode(array_values(array_map(static fn(array $row): array => array_intersect_key($row, array_flip(['id','name','country','address'])), $factories)), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
+const normalize = value => value.toLocaleLowerCase('pl').replace(/ł/g,'l').normalize('NFD').replace(/\p{M}/gu,'').replace(/[^a-z0-9]+/g,'');
+const groups = [['Polska',['Tubądzin','Paradyż','Cerrad']],['Włochy',['Novabell','Italgraniti']]];
+const directory = new Map();
+for (const [place, brands] of Object.entries(names)) {
+    for (const brand of brands) directory.set(normalize(brand), {name:brand, country:place, points:[]});
+}
+for (const point of points) {
+    const key = normalize(point.name);
+    if (!directory.has(key)) directory.set(key, {name:point.name, country:point.country, points:[]});
+    directory.get(key).points.push(point);
+}
+function updateAddress() {
+    if (orderAddress) orderAddress.value = factory.selectedOptions[0]?.dataset.address || '';
+}
+factory?.addEventListener('change', updateAddress);
+updateAddress();
+function selectPoint(point) {
+    if (factory) {
+        factory.value = String(point.id);
+        factory.dispatchEvent(new Event('change'));
+        document.getElementById('new-order').scrollIntoView({block:'start'});
+    }
+    if (directoryName) {
+        country.value = point.country;
+        country.dispatchEvent(new Event('change'));
+        directoryName.value = point.name;
+        directoryAddress.value = point.address;
+    }
+    feedback.textContent = point.address;
+}
+function addButton(container, label, action) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.addEventListener('click', action);
+    container.append(button);
+}
+function selectBrand(brand) {
+    results.replaceChildren();
+    if (brand.points.length === 1) {
+        selectPoint(brand.points[0]);
+    } else if (brand.points.length > 1) {
+        feedback.textContent = 'Wybierz punkt odbioru dla ' + brand.name + '.';
+        for (const point of brand.points) addButton(results, point.address, () => selectPoint(point));
+    } else {
+        if (factory) {
+            factory.value = '';
+            factory.dispatchEvent(new Event('change'));
+        }
+        if (directoryName) {
+            country.value = brand.country;
+            country.dispatchEvent(new Event('change'));
+            directoryName.value = brand.name;
+            directoryAddress.value = '';
+            directoryName.closest('details').open = true;
+            directoryAddress.focus();
+        }
+        feedback.textContent = 'Brak zapisanego adresu odbioru dla ' + brand.name + '.';
+    }
+}
+for (const [, brands] of groups) {
+    const group = document.createElement('div');
+    group.className = 'factory-group';
+    shortcuts.append(group);
+    for (const brand of brands) addButton(group, brand, () => selectBrand(directory.get(normalize(brand))));
+}
+search.addEventListener('input', () => {
+    results.replaceChildren();
+    feedback.textContent = '';
+    const query = normalize(search.value);
+    if (!query) return;
+    let found = false;
+    for (const [key, brand] of directory) {
+        if (key.includes(query) || brand.points.some(point => normalize(point.address).includes(query))) {
+            addButton(results, brand.name, () => selectBrand(brand));
+            found = true;
+        }
+    }
+    if (!found) feedback.textContent = 'Brak pasujących fabryk.';
+});
 </script>
 </body>
 </html>
