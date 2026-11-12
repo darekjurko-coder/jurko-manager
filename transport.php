@@ -389,11 +389,11 @@ main{max-width:1600px}
 .factory-recipients label{display:flex;align-items:center;gap:6px;padding:5px 8px;overflow-wrap:anywhere}
 .factory-recipients label:has(:checked){background:#e1f1e8;border-radius:6px}
 .factory-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
-.factory-row .factory-add{width:27px;text-align:center;font-size:15px;padding:2px}
+.factory-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}.factory-heading h2{margin:0}.factory-heading button{width:30px;text-align:center;font-size:17px;padding:3px}
 .shipment-step{border:1px solid #dce0e3;border-radius:6px;padding:7px}
 .transport-messages .actions [aria-disabled=true]{opacity:.55;cursor:default}
 .factory-menu{position:static}
-#factory-entry{border-top:1px solid #dce0e3;padding-top:10px}
+#factory-entry{box-sizing:border-box;width:min(460px,calc(100% - 24px));max-height:calc(100% - 24px);padding:16px;border:1px solid #dce0e3;border-radius:8px;color:inherit}#factory-entry::backdrop{background:#18292066}
 #factory-entry form{display:grid;gap:5px}
 #factory-entry input,#factory-entry select{width:100%}
 #factory-entry form button{white-space:normal;text-align:center}
@@ -427,15 +427,15 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <div class="transport-sidebar">
 <a class="button" href="#transport-history" id="open-history" aria-expanded="false">Wcześniejsze zlecenia</a>
 <aside class="factory-menu" aria-label="Fabryki">
-<h2>Fabryki</h2>
+<div class="factory-heading"><h2>Fabryki</h2><?php if ($owner): ?><button type="button" id="add-factory" aria-label="Dodaj fabrykę" title="Dodaj fabrykę">+</button><?php endif ?></div>
 <div id="factory-shortcuts"></div>
 <label>Szukaj fabryki<input id="factory-search" type="search" placeholder="Nazwa lub adres"></label>
 <div id="factory-results"></div>
 <div id="factory-top-carriers"></div>
 <p id="factory-feedback" class="muted" role="status"></p>
 <?php if ($owner): ?>
-<details id="factory-entry">
-<summary>+ Dodaj fabrykę</summary>
+<dialog id="factory-entry" aria-labelledby="factory-entry-title">
+<div class="factory-heading"><h2 id="factory-entry-title">Dodaj fabrykę</h2><button type="button" id="close-factory" aria-label="Zamknij">×</button></div>
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="factory">
 <input type="hidden" name="directory_id" id="directory-point-id">
@@ -449,7 +449,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <p id="factory-photo-status" class="muted" role="status"></p>
 <button>Zapisz punkt odbioru</button>
 </form>
-</details>
+</dialog>
 <?php endif ?>
 </aside>
 <section class="carrier-directory">
@@ -718,30 +718,23 @@ function addButton(container, label, action) {
 }
 const defaultTubadzin = 'Tubądzin Management Group, Cedrowice Parcela 11, 95-035 Ozorków';
 let expandedFactory;
-function openFactoryEntry(brand, point = null) {
+function openFactoryEntry(point = null) {
     const entry = document.getElementById('factory-entry');
     entry.querySelector('form').reset();
     document.getElementById('factory-photo-status').textContent = '';
     document.getElementById('directory-point-id').value = point?.id ?? '';
-    country.value = point?.country ?? brand.country;
+    country.value = point?.country ?? country.options[0].value;
     country.dispatchEvent(new Event('change'));
-    document.getElementById('directory-factory').value = point?.name ?? brand.name;
+    document.getElementById('directory-factory').value = point?.name ?? '';
     document.getElementById('directory-address').value = point?.address ?? '';
     document.getElementById('directory-emails').value = point?.email ?? '';
-    entry.querySelector('summary').textContent = point ? 'Modyfikuj punkt odbioru' : '+ Dodaj fabrykę';
-    entry.open = true;
-    entry.scrollIntoView({block:'nearest'});
-    document.getElementById(point ? 'directory-factory' : 'directory-address').focus({preventScroll:true});
+    document.getElementById('factory-entry-title').textContent = point ? 'Modyfikuj punkt odbioru' : 'Dodaj fabrykę';
+    entry.showModal();
+    document.getElementById('directory-factory').focus();
 }
 if (country) {
-    const entry = document.getElementById('factory-entry');
-    entry.addEventListener('toggle', () => {
-        if (entry.open) return;
-        entry.querySelector('form').reset();
-        document.getElementById('directory-point-id').value = '';
-        entry.querySelector('summary').textContent = '+ Dodaj fabrykę';
-        country.dispatchEvent(new Event('change'));
-    });
+    document.getElementById('add-factory').addEventListener('click', () => openFactoryEntry());
+    document.getElementById('close-factory').addEventListener('click', () => document.getElementById('factory-entry').close());
 }
 function addFactory(container, brand) {
     const group = document.createElement('div');
@@ -763,18 +756,12 @@ function addFactory(container, brand) {
         expandedFactory = {addresses,toggle};
     });
     toggle.setAttribute('aria-expanded','false');
-    if (country) {
-        const plus = addButton(row, '+', () => openFactoryEntry(brand));
-        plus.className = 'factory-add';
-        plus.setAttribute('aria-label','Dodaj adres odbioru: '+brand.name);
-        plus.title = 'Dodaj adres odbioru';
-    }
     for (const point of brand.points) {
         const pointRow = document.createElement('div');
         pointRow.className = 'factory-row';
         addButton(pointRow, point.address, () => selectPoint(point));
         if (country) {
-            const edit = addButton(pointRow, 'Modyfikuj', () => openFactoryEntry(brand, point));
+            const edit = addButton(pointRow, 'Modyfikuj', () => openFactoryEntry(point));
             edit.setAttribute('aria-label','Modyfikuj punkt odbioru: '+point.address);
         }
         addresses.append(pointRow);
