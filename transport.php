@@ -461,6 +461,23 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </div>
 </details>
 </section>
+<section id="unload-directory">
+<h2>Punkt rozładunku</h2>
+<div class="directory-buttons">
+<button type="button" data-unload="JURKO, Al. Jerozolimskie 229, 02-495 Warszawa">JURKO · Al. Jerozolimskie 229</button>
+<?php foreach ($unloads as $item): ?><button type="button" data-unload="<?=e($item['address'])?>"><?=e($item['name'])?><br><small><?=e($item['address'])?></small></button><?php endforeach ?>
+</div>
+<?php if ($owner): ?>
+<details><summary>Dodaj punkt rozładunku</summary>
+<form method="post">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="unload">
+<label>Nazwa budowy lub punktu<input name="name" maxlength="150" required></label>
+<label>Adres rozładunku<input name="address" maxlength="300" required></label>
+<button>Zapisz punkt rozładunku</button>
+</form>
+</details>
+<?php endif ?>
+</section>
 </div>
 <div class="transport-content">
 <h1>Transport zewnętrzny</h1>
@@ -530,23 +547,6 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <label>Treść wiadomości<textarea id="carrier-preview" rows="6" readonly></textarea></label>
 <div class="actions"><a class="button" id="carrier-mail" aria-disabled="true">E-mail</a><a class="button" id="carrier-whatsapp" aria-disabled="true" target="_blank" rel="noopener noreferrer">WhatsApp</a><a class="button" id="carrier-sms" aria-disabled="true">SMS</a></div>
 <p id="carrier-channel-status" class="muted" role="status"></p>
-</section>
-<section id="unload-directory">
-<h2>Punkt rozładunku</h2>
-<div class="directory-buttons">
-<button type="button" data-unload="JURKO, Al. Jerozolimskie 229, 02-495 Warszawa">JURKO · Al. Jerozolimskie 229</button>
-<?php foreach ($unloads as $item): ?><button type="button" data-unload="<?=e($item['address'])?>"><?=e($item['name'])?><br><small><?=e($item['address'])?></small></button><?php endforeach ?>
-</div>
-<?php if ($owner): ?>
-<details><summary>Dodaj punkt rozładunku</summary>
-<form method="post">
-<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="unload">
-<label>Nazwa budowy lub punktu<input name="name" maxlength="150" required></label>
-<label>Adres rozładunku<input name="address" maxlength="300" required></label>
-<button>Zapisz punkt rozładunku</button>
-</form>
-</details>
-<?php endif ?>
 </section>
 <section>
 <h2>Dane kierowcy do fabryki</h2>
