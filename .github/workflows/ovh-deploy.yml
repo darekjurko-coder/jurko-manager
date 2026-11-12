@@ -29,6 +29,19 @@ jobs:
           php tests/portal-policy.php
           sh -n scripts/deploy-ovh.sh
           python3 scripts/build-schema.py --check
+          ocr_dir="$PWD/app/transport-ocr"
+          ocr_tmp="$(mktemp -d)"
+          mkdir -p "$ocr_dir"
+          (
+            cd "$ocr_tmp"
+            npm pack --silent tesseract.js@6.0.1 tesseract.js-core@6.0.0 @tesseract.js-data/pol@1.0.0 @tesseract.js-data/eng@1.0.0
+            tar -xzf tesseract.js-6.0.1.tgz -C "$ocr_dir" --strip-components=2 package/dist/tesseract.min.js package/dist/worker.min.js package/dist/tesseract.min.js.LICENSE.txt package/dist/worker.min.js.LICENSE.txt
+            tar -xzf tesseract.js-core-6.0.0.tgz -C "$ocr_dir" --strip-components=1 package/tesseract-core-lstm.wasm.js package/tesseract-core-lstm.wasm package/tesseract-core-simd-lstm.wasm.js package/tesseract-core-simd-lstm.wasm package/LICENSE
+            for lang in pol eng; do
+              tar -xzf "tesseract.js-data-$lang-1.0.0.tgz" -C "$ocr_dir" --strip-components=2 "package/4.0.0_best_int/$lang.traineddata.gz"
+            done
+          )
+          rm -r "$ocr_tmp"
           tar -czf /tmp/jurko-release.tar.gz index.php index.html pracownik.html portal.php transport.php portal-api.php sales-api.php sales.js portal-client.js owner-panel.js staff.js .htaccess .ovhconfig server auth app vendor composer.json composer.lock scripts/backup-db.php
       - name: Przygotuj prywatną konfigurację Google
         env:

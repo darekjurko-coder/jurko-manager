@@ -279,7 +279,7 @@ try {
 }
 $nonce = base64_encode(random_bytes(18));
 $frameAncestors = $embedded ? "'self'" : "'none'";
-header("Content-Security-Policy: default-src 'none'; style-src 'nonce-$nonce'; script-src 'nonce-$nonce'; form-action 'self'; frame-ancestors $frameAncestors; base-uri 'none'");
+header("Content-Security-Policy: default-src 'none'; style-src 'nonce-$nonce'; script-src 'nonce-$nonce' 'self'; worker-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors $frameAncestors; base-uri 'none'");
 $csrf = e($_SESSION['csrf']);
 $createValues = ($_POST['action'] ?? '') === 'create' ? $_POST : [];
 function previous(string $key): string
@@ -330,6 +330,12 @@ main{max-width:1600px}
 .factory-row .factory-add{width:36px;text-align:center;font-size:20px;padding:4px}
 .shipment-step{border:1px solid #dce0e3;border-radius:10px;padding:12px}
 .transport-messages .actions [aria-disabled=true]{opacity:.55;cursor:default}
+.factory-menu{position:static}
+#factory-entry{border-top:1px solid #dce0e3;padding-top:10px}
+#factory-entry form{display:grid;gap:8px}
+#factory-entry input,#factory-entry select{width:100%}
+#factory-entry form button{white-space:normal;text-align:center}
+#factory-photo-status:empty{display:none}
 </style>
 </head>
 <body>
@@ -350,6 +356,23 @@ main{max-width:1600px}
 <div id="factory-results"></div>
 <div id="factory-top-carriers"></div>
 <p id="factory-feedback" class="muted" role="status"></p>
+<?php if ($owner): ?>
+<details id="factory-entry">
+<summary>Dodaj punkt odbioru</summary>
+<form method="post">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="factory">
+<label>Kraj<select name="country" required id="factory-country"><?php foreach (FACTORIES as $country => $names): ?><option><?=e($country)?></option><?php endforeach ?></select></label>
+<label>Fabryka<input id="directory-factory" name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
+<label>Adres odbioru<input id="directory-address" name="address" maxlength="300" required></label>
+<label>E-maile do fabryki<input id="directory-emails" name="email" type="email" multiple maxlength="254" placeholder="Adresy oddziel przecinkami"></label>
+<label>Zdjęcie z danymi<input id="factory-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+<label>Tekst ze zdjęcia lub schowka<textarea id="factory-photo-text" rows="3" maxlength="12000"></textarea></label>
+<button type="button" id="fill-factory-fields">Uzupełnij pola z tekstu</button>
+<p id="factory-photo-status" class="muted" role="status"></p>
+<button>Zapisz punkt odbioru</button>
+</form>
+</details>
+<?php endif ?>
 </aside>
 </div>
 <div class="transport-content">
@@ -415,17 +438,8 @@ main{max-width:1600px}
 <?php if ($employees): ?><ul><?php foreach ($employees as $employee): ?><li><?=e($employee['email'])?> · <?=$employee['active']?'Aktywny':'Wyłączony'?></li><?php endforeach ?></ul><?php endif ?>
 </details>
 <details <?=(!$factories || !$carriers) ? 'open' : ''?>>
-<summary>Kartoteka fabryk i przewoźników</summary>
+<summary>Kartoteka przewoźników</summary>
 <div class="grid">
-<form method="post">
-<h2>Punkt odbioru</h2>
-<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="factory">
-<label>Kraj<select name="country" required id="factory-country"><?php foreach (FACTORIES as $country => $names): ?><option><?=e($country)?></option><?php endforeach ?></select></label>
-<label>Fabryka<input id="directory-factory" name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
-<label>Adres odbioru<input id="directory-address" name="address" maxlength="300" required></label>
-<label>E-maile do fabryki<input name="email" type="email" multiple maxlength="254" placeholder="Adresy oddziel przecinkami"></label>
-<p><button>Zapisz punkt odbioru</button></p>
-</form>
 <form method="post">
 <h2>Przewoźnik</h2>
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="carrier">
@@ -436,7 +450,7 @@ main{max-width:1600px}
 </form>
 </div>
 <div class="table"><table><thead><tr><th>Rodzaj</th><th>Nazwa</th><th>Adres lub kontakt</th></tr></thead><tbody>
-<?php foreach ($directory as $item): ?>
+<?php foreach ($carriers as $item): ?>
 <tr><td><?=$item['kind']==='factory'?'Fabryka':'Przewoźnik'?></td><td><?=e($item['name'])?></td><td><?=e(implode(' · ',array_filter([$item['country'],$item['address'],$item['email'],$item['phone']])))?></td></tr>
 <?php endforeach ?>
 </tbody></table></div>
@@ -633,7 +647,7 @@ function addFactory(container, brand) {
             country.dispatchEvent(new Event('change'));
             factoryName.value = brand.name;
             address.closest('details').open = true;
-            address.scrollIntoView({block:'center'});
+            address.closest('details').scrollIntoView({block:'nearest'});
             address.focus({preventScroll:true});
         });
         plus.className = 'factory-add';
@@ -786,6 +800,86 @@ orderForm.addEventListener('input', updatePreviews);
 orderForm.addEventListener('change', updatePreviews);
 for (const field of [...driverFields,email]) field.addEventListener('input', updatePreviews);
 updatePreviews();
+if (country) {
+    const photo = document.getElementById('factory-photo');
+    const rawText = document.getElementById('factory-photo-text');
+    const photoStatus = document.getElementById('factory-photo-status');
+    let ocrLibrary;
+
+    function fillFactoryFields() {
+        const raw = rawText.value.trim();
+        if (!raw) {
+            photoStatus.textContent = 'Dodaj zdjęcie lub wklej tekst.';
+            return;
+        }
+        const emails = [...new Set((raw.match(/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/gi) || [])
+            .map(email => email.toLowerCase()))].join(',');
+        const lines = raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+        const addressLabel = /^(?:adres(?: odbioru| załadunku)?|punkt odbioru|pickup address|indirizzo)\s*:\s*/i;
+        const street = /(?:^|\s)(?:ul\.|al\.|via\s|viale\s|strada\s|calle\s)/i;
+        const postal = /\b(?:\d{2}-\d{3}|\d{5})\b/;
+        const labelIndex = lines.findIndex(line => addressLabel.test(line));
+        const postalIndex = lines.findIndex(line => postal.test(line));
+        const streetIndex = lines.findIndex(line => street.test(line));
+        const start = labelIndex >= 0 ? labelIndex : streetIndex >= 0 ? streetIndex : postalIndex > 0 && /\d/.test(lines[postalIndex-1]) ? postalIndex-1 : postalIndex;
+        const end = start >= 0 && postalIndex >= start && postalIndex <= start+2 ? postalIndex : start;
+        const address = start < 0 ? '' : lines.slice(start,end+1).map(line => line.replace(addressLabel,'').trim())
+            .filter(line => line && !line.includes('@')).join(', ');
+        const nameField = document.getElementById('directory-factory');
+        const brand = !nameField.value.trim() && [...directory.values()].find(item => normalize(raw).includes(normalize(item.name)));
+        if (brand) {
+            country.value = brand.country;
+            country.dispatchEvent(new Event('change'));
+            nameField.value = brand.name;
+        }
+        if (address && address.length <= 300) document.getElementById('directory-address').value = address;
+        if (emails && emails.length <= 254) document.getElementById('directory-emails').value = emails;
+        photoStatus.textContent = 'Sprawdź uzupełnione pola i dopisz brakujące dane przed zapisaniem.';
+    }
+
+    async function readFactoryPhoto(file) {
+        if (!file || !['image/png','image/jpeg','image/webp'].includes(file.type) || file.size > 12000000) {
+            photoStatus.textContent = 'Wybierz zdjęcie PNG, JPG lub WebP do 12 MB.';
+            return;
+        }
+        photo.disabled = true;
+        photoStatus.textContent = 'Odczytuję zdjęcie…';
+        let worker;
+        try {
+            ocrLibrary ??= new Promise((resolve,reject) => {
+                const script = document.createElement('script');
+                script.src = '/app/transport-ocr/tesseract.min.js';
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.append(script);
+            });
+            await ocrLibrary;
+            const base = new URL('/app/transport-ocr/',location.origin).href;
+            worker = await Tesseract.createWorker(['pol','eng'],1,{
+                workerPath:base+'worker.min.js',corePath:base,langPath:base,workerBlobURL:false
+            });
+            const {data} = await worker.recognize(file);
+            rawText.value = data.text.trim().slice(0,12000);
+            fillFactoryFields();
+        } catch {
+            ocrLibrary = null;
+            photoStatus.textContent = 'Odczyt zdjęcia się nie powiódł. Spróbuj ponownie lub wklej tekst.';
+        } finally {
+            photo.disabled = false;
+            photo.value = '';
+            if (worker) await worker.terminate();
+        }
+    }
+
+    photo.addEventListener('change', () => readFactoryPhoto(photo.files[0]));
+    rawText.addEventListener('paste', event => {
+        const image = Array.from(event.clipboardData.files).find(file => file.type.startsWith('image/'));
+        if (!image) return;
+        event.preventDefault();
+        if (!photo.disabled) readFactoryPhoto(image);
+    });
+    document.getElementById('fill-factory-fields').addEventListener('click',fillFactoryFields);
+}
 </script>
 </body>
 </html>
