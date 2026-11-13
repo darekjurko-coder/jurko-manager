@@ -679,13 +679,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <?php endif ?>
 </section>
 <section><h2>Obostrzenia dostawy</h2><a href="#delivery-restrictions">Zaznacz warunki dostawy</a></section>
-<section><h2>Budowy</h2><a href="#unload-directory">Wybierz budowę</a><br><details id="building-email"><summary>E-mail do budowy</summary>
-<label>Treść e-maila<textarea id="building-preview" rows="8" readonly></textarea></label>
-<label>Adresy e-mail (oddziel przecinkami)<input id="building-recipient" type="email" multiple maxlength="254"></label>
-<div id="building-recipients" role="group" aria-label="Odbiorcy wiadomości"></div>
-<a class="button" id="building-mail" hidden>Wyślij</a>
-<small>Otwiera wiadomość w programie pocztowym.</small>
-</details></section>
+
 
 <?php if ($owner): ?>
 <details class="factory-menu employee-access">
@@ -748,13 +742,14 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <p id="pickup-message" class="muted" role="status"></p>
 </details></div>
 <section id="delivery-restrictions">
-<h2>Obostrzenia dostawy</h2>
+<details open><summary>Obostrzenia dostawy</summary>
 <table><thead><tr><th scope="col">Warunek do uwzględnienia</th><th scope="col">Wymagany</th></tr></thead><tbody>
 <?php foreach (['Kod rozładunku / awizacji','Auto z HDS','Auto z windą','Utwardzony plac do rozładunku','Auto bez plandeki','Ograniczenie tonażowe / zezwolenie','Dostawa o ustalonej godzinie lub w nocy','Oznakowanie świetlne lub dźwiękowe','Rozładunek zapewnia budowa'] as $restriction): ?>
 <tr><td><?=e($restriction)?></td><td><input type="checkbox" data-delivery-condition="<?=e($restriction)?>" aria-label="<?=e($restriction)?>"></td></tr>
 <?php endforeach ?>
 </tbody></table>
 <label>Kod rozładunku lub awizacji<input id="delivery-code" maxlength="120"></label>
+</details>
 </section>
 
 </form>
@@ -762,6 +757,13 @@ $renderCarrier = static function (array $item) use ($owner): void {
 
 </div>
 <aside class="transport-messages" aria-label="Wiadomości transportowe">
+<section><h2>Budowy</h2><a href="#unload-directory">Wybierz budowę</a><br><details id="building-email"><summary>E-mail do budowy</summary>
+<label>Treść e-maila<textarea id="building-preview" rows="8" readonly></textarea></label>
+<label>Adresy e-mail (oddziel przecinkami)<input id="building-recipient" type="email" multiple maxlength="254"></label>
+<div id="building-recipients" role="group" aria-label="Odbiorcy wiadomości"></div>
+<a class="button" id="building-mail" hidden>Wyślij</a>
+<small>Otwiera wiadomość w programie pocztowym.</small>
+</details></section>
 
 <section>
 <h2>Zlecenie do przewoźnika</h2>
