@@ -487,6 +487,10 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .carrier-directory input{width:100%}.carrier-names{margin:6px 0 0;padding-left:18px}
 [id$="-photo-status"]:empty,#pickup-message:empty{display:none}
 .shipment-header{display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:7px}
+.compact-pickup-fields{display:grid;gap:4px 6px}
+.compact-pickup-fields label{margin:0}
+.compact-pickup-fields input{min-height:0;padding:4px 6px}
+#extra-pickups fieldset{min-width:0;margin:0 0 6px}
 .shipment-header>label{flex:0 1 52%}.shipment-fields{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:1050px){.shipment-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .directory-buttons{display:grid;gap:4px;margin:6px 0}
@@ -714,7 +718,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
 <label hidden>Zapisany punkt odbioru<select name="factory" id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
 <label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>"></label>
-<div class="shipment-fields" style="display:grid;gap:6px">
+<div class="shipment-fields compact-pickup-fields">
 <label>Dyspozycja<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>"></label>
 <label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>"></label>
 <label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>"></label>
@@ -729,7 +733,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <legend>Punkt odbioru</legend>
 <label>Zapisany punkt odbioru<select data-pickup-factory></select></label>
 <label>Adres odbioru<input data-pickup="address" maxlength="300"></label>
-<div class="shipment-fields" style="display:grid;gap:6px">
+<div class="shipment-fields compact-pickup-fields">
 <label>Dyspozycja<input data-pickup="reference" maxlength="150"></label>
 <label>Waga brutto (kg)<input data-pickup="weight" type="number" min="0" step="any"></label>
 <label>Data odbioru<input data-pickup="date" type="date"></label>
@@ -919,6 +923,15 @@ function showBrand(brand) {
     }
 }
 function selectPoint(point) {
+    if (orderAddress.value.trim() && factory.value !== String(point.id)) {
+        const available = [...extraPickups.children].find(row =>
+            [...row.querySelectorAll('[data-pickup]')].every(input => !input.value.trim()));
+        const select = available?.querySelector('[data-pickup-factory]') || addPickup();
+        select.value = String(point.id);
+        select.dispatchEvent(new Event('change', {bubbles:true}));
+        select.focus();
+        return;
+    }
     factory.value = String(point.id);
     factory.dispatchEvent(new Event('change'));
     feedback.textContent = point.address;
