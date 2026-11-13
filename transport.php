@@ -537,21 +537,6 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </aside>
 <section class="carrier-directory">
 <h2>Przewoźnik</h2>
-<?php if ($owner): ?>
-<details><summary>Dodaj firmę transportową</summary>
-<form method="post">
-<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="carrier">
-<label>Nazwa firmy<input id="carrier-name" name="name" maxlength="150" required></label>
-<label>E-mail<input id="carrier-email" name="email" type="email" maxlength="254"></label>
-<label>Telefon do SMS / WhatsApp<input id="carrier-phone" name="phone" type="tel" maxlength="30" placeholder="+48"></label>
-<label>Zdjęcie z danymi<input id="carrier-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
-<label>Wklej zdjęcie lub tekst<textarea id="carrier-photo-text" rows="3" maxlength="12000"></textarea></label>
-<button type="button" id="fill-carrier-fields">Uzupełnij pola z tekstu</button>
-<p id="carrier-photo-status" class="muted" role="status"></p>
-<button>Zapisz przewoźnika</button>
-</form>
-</details>
-<?php endif ?>
 <?php
 $renderCarrier = static function (array $item) use ($owner): void {
 ?>
@@ -574,6 +559,21 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <p id="carrier-no-results" role="status" <?=$carriers ? 'hidden' : ''?>>Brak pasujących przewoźników.</p>
 <label>Szukaj przewoźnika<input id="carrier-search" type="search" placeholder="Nazwa lub NIP"></label>
 </details>
+<?php if ($owner): ?>
+<details><summary>Dodaj firmę transportową</summary>
+<form method="post">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="carrier">
+<label>Nazwa firmy<input id="carrier-name" name="name" maxlength="150" required></label>
+<label>E-mail<input id="carrier-email" name="email" type="email" maxlength="254"></label>
+<label>Telefon do SMS / WhatsApp<input id="carrier-phone" name="phone" type="tel" maxlength="30" placeholder="+48"></label>
+<label>Zdjęcie z danymi<input id="carrier-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
+<label>Wklej zdjęcie lub tekst<textarea id="carrier-photo-text" rows="3" maxlength="12000"></textarea></label>
+<button type="button" id="fill-carrier-fields">Uzupełnij pola z tekstu</button>
+<p id="carrier-photo-status" class="muted" role="status"></p>
+<button>Zapisz przewoźnika</button>
+</form>
+</details>
+<?php endif ?>
 <?php if ($owner): ?>
 <dialog id="carrier-editor" aria-labelledby="carrier-editor-title">
 <h3 id="carrier-editor-title">Popraw dane przewoźnika</h3>
