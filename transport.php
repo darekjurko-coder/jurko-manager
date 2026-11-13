@@ -105,6 +105,24 @@ try {
         }
     }
 
+    if (!$db->query("SHOW COLUMNS FROM jm_transport_directory LIKE 'unload_profile'")->fetch()) {
+        try {
+            $db->exec("ALTER TABLE jm_transport_directory ADD COLUMN unload_profile TEXT NULL");
+        } catch (PDOException $exception) {
+            if (($exception->errorInfo[1] ?? null) !== 1060) throw $exception;
+        }
+    }
+    $unloadFields = [
+        'town' => ['Miejscowość', 120],
+        'manager' => ['Kierownik budowy', 150],
+        'contacts' => ['Kontakty i telefony', 500],
+        'limits' => ['Dojazd, tonaż i zezwolenie', 700],
+        'load' => ['Maksymalna liczba palet i masa ładunku', 200],
+        'vehicle' => ['Typ auta, plandeka, winda, HDS i sposób rozładunku', 700],
+        'window' => ['Godziny dostawy i awizacja', 250],
+        'quote' => ['Warunki do osobnej wyceny', 900],
+    ];
+
     if (isset($_GET['invoice'])) {
         $invoiceId = $_GET['invoice'];
         if (!$owner || !is_string($invoiceId) || !preg_match('/^[0-9]{1,12}$/D', $invoiceId)) {
@@ -190,6 +208,29 @@ try {
                         ($phone !== '' && !preg_match('/^[1-9][0-9]{7,14}$/D', $phone)) ||
                         ($kind === 'carrier' && $email === '' && $phone === '')) {
                         throw new InvalidArgumentException('Podaj poprawny e-mail lub numer WhatsApp z kodem kraju.');
+                    }
+                    if ($kind === 'unload') {
+                        $profile = [];
+                        foreach ($unloadFields as $key => [$label, $length]) {
+                            $profile[$key] = field($key, $length);
+                        }
+                        $profileJson = json_encode($profile, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+                        $unloadId = numberField('directory_id', 12, false, true);
+                        try {
+                            if ($unloadId !== null) {
+                                $query = $db->prepare("UPDATE jm_transport_directory SET name=?,address=?,unload_profile=? WHERE id=? AND kind='unload'");
+                                $query->execute([$name, $address, $profileJson, $unloadId]);
+                            } else {
+                                $query = $db->prepare("INSERT INTO jm_transport_directory (kind,name,country,address,email,phone,unload_profile) VALUES ('unload',?, '', ?, '', '', ?)");
+                                $query->execute([$name, $address, $profileJson]);
+                            }
+                        } catch (PDOException $exception) {
+                            if (($exception->errorInfo[1] ?? null) === 1062) {
+                                throw new InvalidArgumentException('Ten punkt rozładunku już istnieje. Otwórz jego edycję.');
+                            }
+                            throw $exception;
+                        }
+                        break;
                     }
                     $pointId = $kind === 'factory' ? numberField('directory_id', 12, false, true) : null;
                     if ($pointId !== null) {
@@ -448,6 +489,8 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .directory-buttons button{text-align:left;background:#f1f2f3;color:#293238;white-space:normal;overflow-wrap:anywhere}
 .carrier-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}
 .carrier-row[hidden]{display:none}
+#unload-editor{width:min(520px,90vw);max-height:85vh;overflow:auto}
+#unload-directory input,#unload-directory textarea{width:100%}
 #carrier-picker{max-height:24rem;overflow-y:auto}
 #carrier-picker + p + label{display:block;margin-top:8px}
 .carrier-row .carrier-edit{background:transparent;color:#5f6870;font-size:.75rem;padding:3px 7px}
@@ -592,19 +635,43 @@ $renderCarrier = static function (array $item) use ($owner): void {
 </section>
 <section id="unload-directory">
 <h2>Punkt rozładunku</h2>
+<label>Szukaj punktu<input type="search" id="unload-search" placeholder="Firma, miejscowość lub kierownik"></label>
 <div class="directory-buttons">
+<div class="carrier-row" data-unload-search="JURKO Warszawa">
 <button type="button" data-unload="JURKO, Al. Jerozolimskie 229, 02-495 Warszawa">JURKO · Al. Jerozolimskie 229</button>
-<?php foreach ($unloads as $item): ?><button type="button" data-unload="<?=e($item['address'])?>"><?=e($item['name'])?><br><small><?=e($item['address'])?></small></button><?php endforeach ?>
 </div>
+<?php foreach ($unloads as $item):
+    $profile = json_decode($item['unload_profile'] ?? '', true) ?: [];
+    $instructions = [];
+    foreach ($unloadFields as $key => [$label]) {
+        if (($profile[$key] ?? '') !== '') $instructions[] = $label.': '.$profile[$key];
+    }
+    $point = ['id'=>$item['id'], 'name'=>$item['name'], 'address'=>$item['address']] + $profile;
+?>
+<div class="carrier-row" data-unload-search="<?=e(implode(' ', [$item['name'], $item['address'], $profile['town'] ?? '', $profile['manager'] ?? '', $profile['contacts'] ?? '']))?>">
+<button type="button" data-unload="<?=e($item['address'])?>" data-instructions="<?=e(implode("\n", $instructions))?>"><?=e($item['name'])?><br><small><?=e($item['address'])?></small></button>
 <?php if ($owner): ?>
-<details><summary>Dodaj punkt rozładunku</summary>
+<button type="button" class="carrier-edit" data-unload-edit="<?=e(json_encode($point, JSON_THROW_ON_ERROR))?>" aria-label="<?=e('Popraw punkt: '.$item['name'])?>">P</button>
+<?php endif ?>
+</div>
+<?php endforeach ?>
+</div>
+<p id="unload-empty" hidden role="status">Brak pasujących punktów.</p>
+<?php if ($owner): ?>
+<button type="button" id="add-unload">Dodaj punkt rozładunku</button>
+<dialog id="unload-editor" aria-labelledby="unload-editor-title">
+<h3 id="unload-editor-title">Punkt rozładunku</h3>
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="unload">
-<label>Nazwa budowy lub punktu<input name="name" maxlength="150" required></label>
-<label>Adres rozładunku<input name="address" maxlength="300" required></label>
-<button>Zapisz punkt rozładunku</button>
+<input type="hidden" name="directory_id">
+<label>Firma / nazwa budowy<input name="name" maxlength="150" required></label>
+<label>Pełny adres rozładunku<input name="address" maxlength="300" required></label>
+<?php foreach ($unloadFields as $key => [$label, $length]): ?>
+<label><?=e($label)?><?php if ($length >= 500): ?><textarea name="<?=e($key)?>" maxlength="<?=e($length)?>" rows="2"></textarea><?php else: ?><input name="<?=e($key)?>" maxlength="<?=e($length)?>"><?php endif ?></label>
+<?php endforeach ?>
+<div class="actions"><button>Zapisz punkt rozładunku</button><button type="button" id="cancel-unload">Anuluj</button></div>
 </form>
-</details>
+</dialog>
 <?php endif ?>
 </section>
 <?php if ($owner): ?>
@@ -1052,8 +1119,44 @@ for (const button of document.querySelectorAll('[data-carrier]')) {
     });
 }
 const deliveryAddress = document.getElementById('delivery-address');
+const unloadSearch = document.getElementById('unload-search');
+const unloadRows = [...document.querySelectorAll('[data-unload-search]')];
+unloadSearch.addEventListener('input', () => {
+    const query = normalize(unloadSearch.value.trim());
+    for (const row of unloadRows) row.hidden = !normalize(row.dataset.unloadSearch).includes(query);
+    document.getElementById('unload-empty').hidden = unloadRows.some(row => !row.hidden);
+});
+const unloadEditor = document.getElementById('unload-editor');
+if (unloadEditor) {
+    const form = unloadEditor.querySelector('form');
+    document.getElementById('add-unload').addEventListener('click', () => {
+        form.reset();
+        form.elements.namedItem('directory_id').value = '';
+        unloadEditor.showModal();
+    });
+    document.getElementById('cancel-unload').addEventListener('click', () => unloadEditor.close());
+    for (const button of document.querySelectorAll('[data-unload-edit]')) {
+        button.addEventListener('click', () => {
+            form.reset();
+            const point = JSON.parse(button.dataset.unloadEdit);
+            form.elements.namedItem('directory_id').value = point.id;
+            for (const [key, value] of Object.entries(point)) {
+                if (key !== 'id') form.elements.namedItem(key).value = value;
+            }
+            unloadEditor.showModal();
+        });
+    }
+}
+let addedUnloadNotes = '';
 for (const button of document.querySelectorAll('[data-unload]')) {
     button.addEventListener('click', () => {
+        const notes = orderForm.elements.namedItem('notes');
+        const previousNotes = addedUnloadNotes && notes.value.endsWith(addedUnloadNotes)
+            ? notes.value.slice(0, -addedUnloadNotes.length).trimEnd()
+            : notes.value.trimEnd();
+        const instructions = button.dataset.instructions;
+        addedUnloadNotes = instructions ? 'Warunki rozładunku:\n'+instructions : '';
+        notes.value = [previousNotes, addedUnloadNotes].filter(Boolean).join('\n\n');
         deliveryAddress.value = button.dataset.unload;
         deliveryAddress.dispatchEvent(new Event('input', {bubbles:true}));
     });
