@@ -676,7 +676,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <section>
 <h2>Zlecenie do przewoźnika</h2>
 <label>Treść wiadomości<textarea id="carrier-preview" rows="6" readonly></textarea></label>
-<div class="actions"><a class="button" id="carrier-mail" aria-disabled="true">E-mail</a><a class="button" id="carrier-whatsapp" aria-disabled="true" target="_blank" rel="noopener noreferrer">WhatsApp</a><a class="button" id="carrier-sms" aria-disabled="true">SMS</a></div>
+<div class="actions"><a class="button" id="carrier-mail" aria-disabled="true">E-mail</a><a class="button" id="carrier-whatsapp" aria-disabled="true" target="_blank" rel="noopener noreferrer">WhatsApp</a><a class="button" id="carrier-sms" aria-disabled="true">SMS</a><span id="carrier-recipient" class="muted" style="overflow-wrap:anywhere" hidden></span></div>
 <p id="carrier-channel-status" class="muted" role="status"></p>
 </section>
 <section>
@@ -1112,6 +1112,9 @@ function updatePreviews() {
     draftLink('carrier-whatsapp', hasRoute && phone ? 'https://wa.me/'+phone+'?text='+body : '');
     const smsSeparator = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?';
     draftLink('carrier-sms', hasRoute && phone ? 'sms:+'+phone+smsSeparator+'body='+body : '');
+    const recipient = document.getElementById('carrier-recipient');
+    recipient.textContent = [contact?.email, phone && '+'+phone].filter(Boolean).join(' · ');
+    recipient.hidden = !recipient.textContent;
     const channelStatus = document.getElementById('carrier-channel-status');
     channelStatus.textContent = !contact ? 'Wybierz przewoźnika w formularzu.'
         : !hasRoute ? 'Uzupełnij adres odbioru i dostawy.'
