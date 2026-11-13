@@ -113,7 +113,7 @@ try {
         }
     }
     $unloadFields = [
-        'site_email' => ['E-mail budowy', 254],
+        'site_email' => ['E-maile budowy (oddziel przecinkami)', 254],
         'town' => ['Miejscowość', 120],
         'manager' => ['Kierownik budowy', 150],
         'contacts' => ['Kontakty i telefony', 500],
@@ -215,7 +215,7 @@ try {
                         foreach ($unloadFields as $key => [$label, $length]) {
                             $profile[$key] = field($key, $length);
                         }
-                        if ($profile['site_email'] !== '' && !filter_var($profile['site_email'], FILTER_VALIDATE_EMAIL)) {
+                        if ($profile['site_email'] !== '' && array_filter(array_map('trim', explode(',', $profile['site_email'])), static fn($address) => !filter_var($address, FILTER_VALIDATE_EMAIL))) {
                             throw new InvalidArgumentException('Podaj poprawny e-mail budowy.');
                         }
                         $profileJson = json_encode($profile, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
@@ -679,7 +679,13 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <?php endif ?>
 </section>
 <section><h2>Obostrzenia dostawy</h2><a href="#delivery-restrictions">Zaznacz warunki dostawy</a></section>
-<section><h2>Budowy</h2><a href="#unload-directory">Wybierz budowę</a><br><a href="#building-email">Przygotuj e-mail do budowy</a></section>
+<section><h2>Budowy</h2><a href="#unload-directory">Wybierz budowę</a><br><details id="building-email"><summary>E-mail do budowy</summary>
+<label>Treść e-maila<textarea id="building-preview" rows="8" readonly></textarea></label>
+<label>Adresy e-mail (oddziel przecinkami)<input id="building-recipient" type="email" multiple maxlength="254"></label>
+<div id="building-recipients" role="group" aria-label="Odbiorcy wiadomości"></div>
+<a class="button" id="building-mail" hidden>Wyślij</a>
+<small>Otwiera wiadomość w programie pocztowym.</small>
+</details></section>
 
 <?php if ($owner): ?>
 <details class="factory-menu employee-access">
@@ -750,12 +756,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 </tbody></table>
 <label>Kod rozładunku lub awizacji<input id="delivery-code" maxlength="120"></label>
 </section>
-<section id="building-email">
-<h2>E-mail do budowy</h2>
-<label>Adres e-mail budowy<input id="building-recipient" type="email" maxlength="254"></label>
-<label>Treść e-maila<textarea id="building-preview" rows="8" readonly></textarea></label>
-<a class="button" id="building-mail" hidden>Otwórz szkic e-maila</a>
-</section>
+
 </form>
 </section>
 
@@ -1170,6 +1171,28 @@ if (unloadEditor) {
     }
 }
 const buildingRecipient = document.getElementById('building-recipient');
+const buildingRecipients = document.getElementById('building-recipients');
+function refreshBuildingRecipients() {
+    const checked = new Set([...buildingRecipients.querySelectorAll('input:checked')].map(input => input.value));
+    const addresses = buildingRecipient.validity.valid
+        ? [...new Set(buildingRecipient.value.split(',').map(address => address.trim()).filter(Boolean))]
+        : [];
+    buildingRecipients.replaceChildren();
+    for (const address of addresses) {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.value = address;
+        input.checked = checked.has(address);
+        label.append(input, ' '+address);
+        buildingRecipients.append(label);
+    }
+}
+buildingRecipient.addEventListener('input', () => {
+    refreshBuildingRecipients();
+    updatePreviews();
+});
+buildingRecipients.addEventListener('change', updatePreviews);
 const deliveryCode = document.getElementById('delivery-code');
 const deliveryConditions = [...document.querySelectorAll('[data-delivery-condition]')];
 const orderNotes = orderForm.elements.namedItem('notes');
@@ -1208,6 +1231,8 @@ for (const button of document.querySelectorAll('[data-unload]')) {
         addedUnloadNotes = instructions ? 'Warunki rozładunku:\n'+instructions : '';
         notes.value = [previousNotes, addedUnloadNotes].filter(Boolean).join('\n\n');
         buildingRecipient.value = button.dataset.siteEmail || '';
+        buildingRecipients.replaceChildren();
+        refreshBuildingRecipients();
         deliveryAddress.value = button.dataset.unload;
         deliveryAddress.dispatchEvent(new Event('input', {bubbles:true}));
     });
@@ -1265,7 +1290,8 @@ function updatePreviews() {
         ['Warunki rozładunku',value('notes')], ['Obostrzenia dostawy',selectedRestrictions()]
     ]);
     document.getElementById('building-preview').value = buildingMessage;
-    draftLink('building-mail', buildingRecipient.value.trim() && buildingRecipient.validity.valid ? mailto(buildingRecipient.value.trim(),buildingMessage).replace(/([?&]subject=)[^&]*/, '$1'+encodeURIComponent('Awizacja dostawy – JURKO')) : '');
+    const selectedBuildingEmails = [...buildingRecipients.querySelectorAll('input:checked')].map(input => input.value);
+    draftLink('building-mail', selectedBuildingEmails.length ? mailto(selectedBuildingEmails.join(','),buildingMessage).replace(/([?&]subject=)[^&]*/, '$1'+encodeURIComponent('Awizacja dostawy – JURKO')) : '');
     const hasRoute = Boolean(value('pickup_address') && value('delivery_address'));
     const phone = /^\d{8,15}$/.test(contact?.phone || '') ? contact.phone : '';
     const body = encodeURIComponent(carrierPreview.value);
