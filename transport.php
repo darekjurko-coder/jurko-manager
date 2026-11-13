@@ -714,14 +714,30 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <input type="hidden" id="pickup-country" name="pickup_country" value="<?=previous('pickup_country')?>">
 <label hidden>Zapisany punkt odbioru<select name="factory" id="order-factory"><option value="">Wybierz punkt odbioru</option><?php foreach (array_keys(FACTORIES) as $country): ?><optgroup label="<?=e($country)?>"><?php foreach ($factories as $item): if ($item['country'] !== $country) continue; ?><option value="<?=e($item['id'])?>" data-address="<?=e($item['address'])?>" <?=previous('factory')===(string)$item['id']?'selected':''?>><?=e($item['name'].' · '.$item['address'])?></option><?php endforeach ?></optgroup><?php endforeach ?></select></label>
 <label>Adres odbioru<input id="order-address" name="pickup_address" maxlength="300" value="<?=previous('pickup_address')?>"></label>
-</div>
-<div class="pickup-block shipment-step shipment-fields">
+<div class="shipment-fields" style="display:grid;gap:6px">
 <label>Dyspozycja<input id="pickup-reference" name="reference" maxlength="150" value="<?=previous('reference')?>"></label>
 <label>Waga brutto (kg)<input name="weight" inputmode="decimal" value="<?=previous('weight')?>"></label>
 <label>Data odbioru<input type="date" name="pickup" value="<?=previous('pickup')?>"></label>
 <label>Liczba palet<input type="number" name="pallets" min="1" max="999999" value="<?=previous('pallets')?>"></label>
 <label>Data dostawy<input type="date" name="delivery" value="<?=previous('delivery')?>"></label>
 </div>
+</div>
+<div id="extra-pickups"></div>
+<div class="actions" style="justify-content:flex-end"><button type="button" id="add-pickup">Dodaj kolejny punkt odbioru</button></div>
+<template id="extra-pickup-template">
+<fieldset class="pickup-block shipment-step">
+<legend>Punkt odbioru</legend>
+<label>Zapisany punkt odbioru<select data-pickup-factory></select></label>
+<label>Adres odbioru<input data-pickup="address" maxlength="300"></label>
+<div class="shipment-fields" style="display:grid;gap:6px">
+<label>Dyspozycja<input data-pickup="reference" maxlength="150"></label>
+<label>Waga brutto (kg)<input data-pickup="weight" type="number" min="0" step="any"></label>
+<label>Data odbioru<input data-pickup="date" type="date"></label>
+<label>Liczba palet<input data-pickup="pallets" type="number" min="1" max="999999"></label>
+</div>
+<button type="button" data-remove-pickup>Usuń punkt</button>
+</fieldset>
+</template>
 <div class="pickup-block shipment-step">
 <h3>Przewoźnik</h3>
 <div id="selected-carrier" class="selected-carrier" hidden></div>
@@ -1086,6 +1102,43 @@ search.addEventListener('input', () => {
     if (!found) feedback.textContent = 'Brak pasujących fabryk.';
 });
 const orderForm = document.querySelector('#new-order form');
+const extraPickups = document.getElementById('extra-pickups');
+const pickupTemplate = document.getElementById('extra-pickup-template');
+function numberPickups() {
+    [...extraPickups.children].forEach((row, index) => {
+        row.querySelector('legend').textContent = 'Punkt odbioru '+(index+2);
+    });
+}
+function addPickup(values = {}) {
+    const row = pickupTemplate.content.firstElementChild.cloneNode(true);
+    const select = row.querySelector('[data-pickup-factory]');
+    select.replaceChildren(...[...document.getElementById('order-factory').children].map(option => option.cloneNode(true)));
+    select.value = '';
+    for (const input of row.querySelectorAll('[data-pickup]')) input.value = values[input.dataset.pickup] ?? '';
+    select.addEventListener('change', () => {
+        row.querySelector('[data-pickup="address"]').value = select.selectedOptions[0]?.dataset.address || '';
+    });
+    row.querySelector('[data-remove-pickup]').addEventListener('click', () => {
+        row.remove();
+        numberPickups();
+        updatePreviews();
+    });
+    extraPickups.append(row);
+    numberPickups();
+    return select;
+}
+document.getElementById('add-pickup').addEventListener('click', () => addPickup().focus());
+function pickupRows() {
+    return [...extraPickups.children].map(row => Object.fromEntries(
+        [...row.querySelectorAll('[data-pickup]')].map(input => [input.dataset.pickup,input.value.trim()])
+    )).filter(point => Object.values(point).some(Boolean));
+}
+function pickupLines() {
+    return pickupRows().map((point,index) => ['Punkt odbioru '+(index+2),
+        [point.address || 'Brak adresu', point.reference && 'dyspozycja '+point.reference,
+        point.weight && point.weight+' kg', point.date && 'odbiór '+point.date,
+        point.pallets && point.pallets+' pal.'].filter(Boolean).join(' · ')]);
+}
 const orderHistory = document.getElementById('transport-history');
 const historyLink = document.getElementById('open-history');
 historyLink.setAttribute('aria-expanded', String(!orderHistory.hidden));
@@ -1213,6 +1266,17 @@ if (savedRestrictions) {
     deliveryCode.value = lines.find(line => line.startsWith('Kod: '))?.slice(5) || '';
     orderNotes.value = orderNotes.value.slice(0, savedRestrictions.index);
 }
+const pickupMarker = '\n\nDodatkowe punkty odbioru (dane): ';
+const pickupNotesIndex = orderNotes.value.lastIndexOf(pickupMarker.trimStart());
+if (pickupNotesIndex >= 0) {
+    try {
+        const saved = JSON.parse(orderNotes.value.slice(pickupNotesIndex+pickupMarker.trimStart().length));
+        if (Array.isArray(saved)) {
+            saved.forEach(point => addPickup(point));
+            orderNotes.value = orderNotes.value.slice(0,pickupNotesIndex).trimEnd();
+        }
+    } catch {}
+}
 function selectedRestrictions() {
     const lines = deliveryConditions.filter(checkbox => checkbox.checked).map(checkbox => checkbox.dataset.deliveryCondition);
     if (deliveryCode.value.trim()) lines.push('Kod: '+deliveryCode.value.trim());
@@ -1220,8 +1284,15 @@ function selectedRestrictions() {
 }
 orderForm.addEventListener('submit', event => {
     const restrictions = selectedRestrictions();
-    if (!restrictions) return;
-    const combined = (orderNotes.value.trimEnd()+restrictionsHeading+restrictions).trimStart();
+    const points = pickupRows();
+    if (points.some(point => !point.address)) {
+        event.preventDefault();
+        alert('Uzupełnij adres każdego punktu odbioru.');
+        return;
+    }
+    if (!restrictions && !points.length) return;
+    const combined = (orderNotes.value.trimEnd()+(points.length ? pickupMarker+JSON.stringify(points) : '')+
+        (restrictions ? restrictionsHeading+restrictions : '')).trimStart();
     if ([...combined].length > 6000) {
         event.preventDefault();
         alert('Skróć uwagi do zlecenia, aby zmieścić warunki dostawy.');
@@ -1286,7 +1357,7 @@ function updatePreviews() {
     const shipment = [['Odbiór z',value('pickup_address') || '—'],['Dostawa do',value('delivery_address') || '—'],
         common[0],common[2],common[3],['Data dostawy',value('delivery')],
         ['Waga brutto',value('weight') && value('weight')+' kg'],['Liczba palet',value('pallets')],
-        ['Uwagi',value('notes')],['Obostrzenia dostawy',selectedRestrictions()]];
+        ...pickupLines(),['Uwagi',value('notes')],['Obostrzenia dostawy',selectedRestrictions()]];
     const driver = [...common,...driverFields.map((field,index) => [['Kierowca','Telefon','Rejestracja'][index],field.value.trim()])];
     const compose = (intro, fields) => 'Dzień dobry,\n'+intro+'\n\n'+fields.filter(([,text])=>text).map(([label,text])=>label+': '+text).join('\n');
     carrierPreview.value = compose('Proszę o odbiór i dostarczenie przesyłki.',shipment);
