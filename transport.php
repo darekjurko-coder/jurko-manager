@@ -448,6 +448,8 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .directory-buttons button{text-align:left;background:#f1f2f3;color:#293238;white-space:normal;overflow-wrap:anywhere}
 .carrier-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}
 .carrier-row[hidden]{display:none}
+#carrier-picker{max-height:24rem;overflow-y:auto}
+#carrier-picker + p + label{display:block;margin-top:8px}
 .carrier-row .carrier-edit{background:transparent;color:#5f6870;font-size:.75rem;padding:3px 7px}
 .carrier-row .carrier-edit:focus-visible{outline:2px solid currentColor}
 .directory-buttons button:hover{background:#e0e3e6}
@@ -566,11 +568,11 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <?php foreach (array_slice($carriers, 0, 3) as $item) $renderCarrier($item); ?>
 </div>
 <details><summary>Wybierz przewoźnika</summary>
-<label>Szukaj przewoźnika<input id="carrier-search" type="search" placeholder="Nazwa lub NIP"></label>
 <div id="carrier-picker" class="directory-buttons">
 <?php foreach ($carriers as $item) $renderCarrier($item); ?>
 </div>
 <p id="carrier-no-results" role="status" <?=$carriers ? 'hidden' : ''?>>Brak pasujących przewoźników.</p>
+<label>Szukaj przewoźnika<input id="carrier-search" type="search" placeholder="Nazwa lub NIP"></label>
 </details>
 <?php if ($owner): ?>
 <dialog id="carrier-editor" aria-labelledby="carrier-editor-title">
