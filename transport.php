@@ -487,6 +487,8 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .carrier-directory input{width:100%}.carrier-names{margin:6px 0 0;padding-left:18px}
 [id$="-photo-status"]:empty,#pickup-message:empty{display:none}
 .shipment-header{display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:7px}
+.pickup-actions{justify-content:flex-end;margin:6px 0 18px}
+.pickup-actions #add-pickup{margin-left:auto}
 .compact-pickup-fields{display:grid;gap:4px 6px}
 .compact-pickup-fields label{margin:0}
 .compact-pickup-fields input{min-height:0;padding:4px 6px}
@@ -699,7 +701,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <?php endif ?>
 </div>
 <div class="transport-content">
-<div class="transport-heading"><h1>Transport zewnętrzny</h1><a class="button" href="#transport-history" id="open-history" aria-expanded="false">Wcześniejsze zlecenia</a></div>
+<div class="transport-heading"><h1>Transport zewnętrzny</h1><a class="button" href="#transport-history" id="open-history">Wcześniejsze zlecenia</a></div>
 <?php if ($saved): ?><p class="notice" role="status">Zapisano zmiany.</p><?php endif ?>
 <?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
 <section id="new-order">
@@ -727,7 +729,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 </div>
 </div>
 <div id="extra-pickups"></div>
-<div class="actions" style="justify-content:flex-end"><button type="button" id="add-pickup">Dodaj kolejny punkt odbioru</button></div>
+<div class="actions pickup-actions"><button type="button" id="add-pickup">Dodaj kolejny punkt odbioru</button></div>
 <template id="extra-pickup-template">
 <fieldset class="pickup-block shipment-step">
 <legend>Punkt odbioru</legend>
@@ -808,7 +810,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 </details></section>
 </aside>
 
-<section class="transport-history" id="transport-history" <?=($search === '' && ($_GET['unbilled'] ?? '') !== '1' && !isset($_GET['history'])) ? 'hidden' : ''?>>
+<section class="transport-history" id="transport-history">
 <h2>Wcześniejsze zlecenia</h2>
 <form method="get" class="actions">
 <?php if ($embedded): ?><input type="hidden" name="panel" value="1"><?php endif ?>
@@ -1152,15 +1154,6 @@ function pickupLines() {
         point.weight && point.weight+' kg', point.date && 'odbiór '+point.date,
         point.pallets && point.pallets+' pal.'].filter(Boolean).join(' · ')]);
 }
-const orderHistory = document.getElementById('transport-history');
-const historyLink = document.getElementById('open-history');
-historyLink.setAttribute('aria-expanded', String(!orderHistory.hidden));
-historyLink.addEventListener('click', event => {
-    event.preventDefault();
-    orderHistory.hidden = !orderHistory.hidden;
-    historyLink.setAttribute('aria-expanded', String(!orderHistory.hidden));
-    if (!orderHistory.hidden) orderHistory.scrollIntoView({block:'nearest'});
-});
 const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','name','address','email','phone','nip'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 const carrierSearch = document.getElementById('carrier-search');
 const carrierRows = [...document.querySelectorAll('#carrier-picker .carrier-row')];
