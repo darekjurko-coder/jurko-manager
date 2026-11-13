@@ -94,6 +94,17 @@ try {
         }
     }
 
+    $columns = $db->query("SHOW COLUMNS FROM jm_transport_directory LIKE 'nip'");
+    if (!$columns->fetch()) {
+        try {
+            $db->exec("ALTER TABLE jm_transport_directory ADD COLUMN nip CHAR(10) NOT NULL DEFAULT ''");
+        } catch (PDOException $exception) {
+            if (($exception->errorInfo[1] ?? null) !== 1060) {
+                throw $exception;
+            }
+        }
+    }
+
     if (isset($_GET['invoice'])) {
         $invoiceId = $_GET['invoice'];
         if (!$owner || !is_string($invoiceId) || !preg_match('/^[0-9]{1,12}$/D', $invoiceId)) {
@@ -136,6 +147,18 @@ try {
                         $query = $db->prepare("UPDATE jm_accounts SET active=FALSE WHERE email=? AND role='employee'");
                     }
                     $query->execute([$email]);
+                    break;
+                case 'carrier_nip':
+                    if (!$owner) {
+                        throw new DomainException('Kartotekę edytuje właściciel.');
+                    }
+                    $carrierId = numberField('directory_id', 12, true, true);
+                    $nip = preg_replace('/[\s-]+/', '', field('nip', 30));
+                    if ($nip !== '' && !preg_match('/^[0-9]{10}$/D', $nip)) {
+                        throw new InvalidArgumentException('NIP powinien mieć 10 cyfr.');
+                    }
+                    $query = $db->prepare("UPDATE jm_transport_directory SET nip=? WHERE id=? AND kind='carrier'");
+                    $query->execute([$nip, $carrierId]);
                     break;
                 case 'directory':
                     if (!$owner) {
@@ -303,8 +326,8 @@ try {
     }
     $search = is_string($_GET['q'] ?? null) ? mb_substr(trim($_GET['q']),0,150) : '';
     if ($search !== '') {
-        $filters[] = "(CONCAT('TR/',DATE_FORMAT(t.created_at,'%Y/%m/'),IF(t.id<1000,LPAD(t.id,4,'0'),t.id)) LIKE ? OR t.reference LIKE ? OR t.carrier_invoice LIKE ? OR t.goods_invoice LIKE ?)";
-        array_push($params,...array_fill(0,4,'%'.$search.'%'));
+        $filters[] = "(CONCAT('TR/',DATE_FORMAT(t.created_at,'%Y/%m/'),IF(t.id<1000,LPAD(t.id,4,'0'),t.id)) LIKE ? OR t.reference LIKE ? OR t.carrier_invoice LIKE ? OR t.goods_invoice LIKE ? OR c.nip LIKE ?)";
+        array_push($params,...array_fill(0,5,'%'.$search.'%'));
         if (preg_match('~^TR/[0-9]{4}/[0-9]{2}/([0-9]{4,12})$~iD', $search, $matches)) {
             $filters[count($filters)-1] = '('.$filters[count($filters)-1].' OR t.id=?)';
             $params[] = $matches[1];
@@ -513,6 +536,19 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <?php foreach ($carriers as $item): ?><button type="button" data-carrier="<?=e($item['id'])?>"><?=e($item['name'])?></button><?php endforeach ?>
 <?php if (!$carriers): ?><p>Brak zapisanych przewoźników.</p><?php endif ?>
 </div>
+<?php if ($owner && $carriers): ?>
+<details><summary>Edytuj NIP przewoźnika</summary>
+<?php foreach ($carriers as $item): ?>
+<form method="post">
+<input type="hidden" name="csrf" value="<?=$csrf?>">
+<input type="hidden" name="action" value="carrier_nip">
+<input type="hidden" name="directory_id" value="<?=e($item['id'])?>">
+<label>NIP · <?=e($item['name'])?><input name="nip" inputmode="numeric" maxlength="30" value="<?=e($item['nip'])?>"></label>
+<button>Zapisz NIP</button>
+</form>
+<?php endforeach ?>
+</details>
+<?php endif ?>
 </details>
 </section>
 <section id="unload-directory">
@@ -927,7 +963,7 @@ historyLink.addEventListener('click', event => {
     historyLink.setAttribute('aria-expanded', String(!orderHistory.hidden));
     if (!orderHistory.hidden) orderHistory.scrollIntoView({block:'nearest'});
 });
-const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','name','address','email','phone'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
+const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','name','address','email','phone','nip'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 const selectedCarrier = document.getElementById('selected-carrier');
 function showCarrier() {
     const contact = carrierContacts[carrier.value];
@@ -937,7 +973,7 @@ function showCarrier() {
     const title = document.createElement('strong');
     title.textContent = contact.name;
     selectedCarrier.append(title);
-    for (const line of [contact.address, contact.email, contact.phone && '+'+contact.phone]) {
+    for (const line of [contact.nip && 'NIP: '+contact.nip, contact.address, contact.email, contact.phone && '+'+contact.phone]) {
         if (!line) continue;
         const detail = document.createElement('div');
         detail.textContent = line;
