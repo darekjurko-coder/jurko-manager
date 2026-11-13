@@ -416,6 +416,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 #factory-entry-handle{cursor:move;touch-action:none;user-select:none}#factory-entry-handle button{cursor:pointer}
 .transport-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-bottom:8px}
 .transport-heading h1{margin:0}.transport-heading .button{min-width:min(220px,100%);text-align:center;box-sizing:border-box}
+.cutting-panel{grid-column:1/-1;background:#fff;border:1px solid #d8e1dc;border-radius:8px;padding:12px}.cutting-tab{display:block;text-align:center}.cutting-scroll{overflow:auto;margin:10px 0}.cutting-scroll table{min-width:1150px}.cutting-scroll input{width:72px;margin:2px}.cutting-scroll td:first-child input{width:135px}.cutting-scroll td:nth-child(4),.cutting-scroll td:nth-child(5){white-space:nowrap}.cutting-scroll td:nth-child(4) input,.cutting-scroll td:nth-child(5) input{width:46px}.cutting-scroll output{display:block;white-space:pre-line;min-width:170px}
 </style>
 </head>
 <body>
@@ -561,6 +562,9 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </div>
 <aside class="transport-messages" aria-label="Wiadomości transportowe">
 <section>
+<a class="button cutting-tab" href="#cutting">Cięcie</a>
+</section>
+<section>
 <h2>Zlecenie do przewoźnika</h2>
 <label>Treść wiadomości<textarea id="carrier-preview" rows="6" readonly></textarea></label>
 <div class="actions"><a class="button" id="carrier-mail" aria-disabled="true">E-mail</a><a class="button" id="carrier-whatsapp" aria-disabled="true" target="_blank" rel="noopener noreferrer">WhatsApp</a><a class="button" id="carrier-sms" aria-disabled="true">SMS</a></div>
@@ -581,6 +585,30 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </section>
 
 </aside>
+<details id="cutting" class="cutting-panel">
+<summary>Cięcie · wycena netto</summary>
+<div class="cutting-scroll"><table>
+<thead><tr><th>Pozycja</th><th>Ilość</th><th>Jednostka</th><th>Płytka (cm)</th><th>Element (cm)</th><th>Elementy z płytki</th><th>Materiał PLN/m²</th><th>Cięcie netto</th><th>Rozkrój</th><th>Narzut %</th><th>Wynik</th><th></th></tr></thead>
+<tbody id="cutting-rows"></tbody>
+</table></div>
+<div class="actions"><button type="button" id="cutting-add">Dodaj pozycję</button><button type="button" id="cutting-example">Dodaj przykłady</button></div>
+<p id="cutting-total" role="status"></p>
+<template id="cutting-row">
+<tr>
+<td><input aria-label="Nazwa pozycji" data-field="name" maxlength="150"></td>
+<td><input aria-label="Ilość" data-field="qty" inputmode="decimal"></td>
+<td><select aria-label="Jednostka ilości" data-field="unit"><option>szt.</option><option>m²</option><option>mb</option></select></td>
+<td><input aria-label="Długość płytki" data-field="tileL" inputmode="decimal"> × <input aria-label="Szerokość płytki" data-field="tileW" inputmode="decimal"></td>
+<td><input aria-label="Długość elementu" data-field="partL" inputmode="decimal"> × <input aria-label="Szerokość elementu" data-field="partW" inputmode="decimal"></td>
+<td><input aria-label="Elementy z płytki, opcjonalna korekta" placeholder="Auto" data-field="yield" inputmode="numeric"></td>
+<td><input aria-label="Cena materiału za metr kwadratowy" data-field="material" inputmode="decimal"></td>
+<td><input aria-label="Koszt obróbki za sztukę" placeholder="PLN/szt." data-field="finish" inputmode="decimal"><input aria-label="Cena obróbki dla klienta za sztukę" placeholder="Klient PLN/szt." data-field="client" inputmode="decimal"></td>
+<td><input aria-label="Metry rozkroju na płytkę" placeholder="mb/płytkę" data-field="cutLength" inputmode="decimal"><input aria-label="Koszt rozkroju za metr" placeholder="PLN/mb" data-field="cutRate" inputmode="decimal"></td>
+<td><input aria-label="Narzut na usługi" data-field="markup" inputmode="decimal"></td>
+<td><output></output></td><td><button type="button" data-remove aria-label="Usuń pozycję">×</button></td>
+</tr>
+</template>
+</details>
 <section class="transport-history" id="transport-history" <?=($search === '' && ($_GET['unbilled'] ?? '') !== '1' && !isset($_GET['history'])) ? 'hidden' : ''?>>
 <h2>Wcześniejsze zlecenia</h2>
 <form method="get" class="actions">
@@ -1085,6 +1113,92 @@ if (country) {
     }
 }
 bindTransportPhoto('pickup',paste,message,splitPickup);
+
+const cutting = document.getElementById('cutting');
+const cuttingRows = document.getElementById('cutting-rows');
+const cuttingKey = 'jurko-cutting-v1';
+const cuttingMoney = new Intl.NumberFormat('pl-PL',{style:'currency',currency:'PLN'});
+const cuttingNumber = new Intl.NumberFormat('pl-PL',{maximumFractionDigits:3});
+const cuttingData = row => Object.fromEntries([...row.querySelectorAll('[data-field]')].map(input => [input.dataset.field,input.value]));
+function calculateCutting(data) {
+    const number = key => {
+        const raw = (data[key] ?? '').trim().replace(',', '.');
+        return raw === '' ? 0 : /^\d+(?:\.\d+)?$/.test(raw) && Number(raw) <= 1e8 ? Number(raw) : NaN;
+    };
+    const qty = number('qty'), tl = number('tileL'), tw = number('tileW');
+    const pl = number('partL'), pw = number('partW'), override = number('yield');
+    const prices = ['material','finish','client','cutLength','cutRate','markup'].map(number);
+    if ([qty,tl,tw,pl,pw,override,...prices].some(Number.isNaN) || !Number.isInteger(override)) return null;
+    if (!qty || !tl || !tw || !pl || !pw) return null;
+    const fit = Math.max(Math.floor(tl/pl)*Math.floor(tw/pw),Math.floor(tl/pw)*Math.floor(tw/pl));
+    if (!fit) return null;
+    const perTile = override || fit;
+    const ceil = value => Math.ceil(value-1e-9);
+    const pieces = ceil(qty / (data.unit === 'm²' ? pl*pw/10000 : data.unit === 'mb' ? pl/100 : 1));
+    const tiles = ceil(pieces/perTile);
+    const area = tiles*tl*tw/10000;
+    const [materialRate,finishRate,clientRate,cutLength,cutRate,markup] = prices;
+    const material = area*materialRate;
+    const cut = tiles*cutLength*cutRate;
+    const cost = material + pieces*finishRate + cut;
+    const sale = material + pieces*(data.client.trim() ? clientRate : finishRate*(1+markup/100)) + cut*(1+markup/100);
+    return {pieces,tiles,area,perTile,cost,sale,cutMeters:tiles*cutLength};
+}
+function updateCutting() {
+    const data = [...cuttingRows.rows].map(cuttingData);
+    let cost=0, sale=0, incomplete=0;
+    data.forEach((item,index) => {
+        const result = calculateCutting(item);
+        const output = cuttingRows.rows[index].querySelector('output');
+        if (!result) {
+            incomplete++;
+            output.textContent = 'Sprawdź ilość i wymiary';
+            return;
+        }
+        cost += result.cost;
+        sale += result.sale;
+        output.textContent = [
+            result.pieces+' szt. · '+result.tiles+' płytek · '+result.perTile+' szt./płytkę',
+            cuttingNumber.format(result.area)+' m² materiału · '+cuttingNumber.format(result.cutMeters)+' mb rozkroju',
+            'Koszt: '+cuttingMoney.format(result.cost),
+            'Klient: '+cuttingMoney.format(result.sale)
+        ].join('\n');
+    });
+    document.getElementById('cutting-total').textContent = 'Koszt netto '+cuttingMoney.format(cost)+' · Dla klienta netto '+cuttingMoney.format(sale)+(incomplete ? ' · Pominięte pozycje: '+incomplete : '');
+    try { localStorage.setItem(cuttingKey,JSON.stringify(data)); } catch {}
+}
+function addCuttingRow(values = {}) {
+    const row = document.getElementById('cutting-row').content.firstElementChild.cloneNode(true);
+    for (const input of row.querySelectorAll('[data-field]')) {
+        if (values[input.dataset.field] !== undefined) input.value = values[input.dataset.field];
+    }
+    cuttingRows.append(row);
+}
+const cuttingExamples = [
+    {name:'Stopnica 30 × 60',tileL:'60',tileW:'60',partL:'60',partW:'30',finish:'6,50',cutLength:'0,60',cutRate:'1,50'},
+    {name:'Stopnica 30 × 120',tileL:'120',tileW:'60',partL:'120',partW:'30',finish:'12',cutLength:'1,20',cutRate:'2'},
+    {name:'Cokół 8 × 60',tileL:'60',tileW:'60',partL:'60',partW:'8',finish:'5,50'},
+    {name:'Cokół 8 × 120',tileL:'120',tileW:'60',partL:'120',partW:'8',finish:'5,50'}
+];
+document.querySelector('.cutting-tab').addEventListener('click',() => { cutting.open = true; });
+if (location.hash === '#cutting') cutting.open = true;
+document.getElementById('cutting-add').addEventListener('click',() => { addCuttingRow(); updateCutting(); });
+document.getElementById('cutting-example').addEventListener('click',() => {
+    for (const example of cuttingExamples) addCuttingRow({qty:'50',unit:'m²',material:'150',markup:'13',...example});
+    updateCutting();
+});
+cuttingRows.addEventListener('input',updateCutting);
+cuttingRows.addEventListener('click',event => {
+    if (!event.target.closest('[data-remove]')) return;
+    event.target.closest('tr').remove();
+    updateCutting();
+});
+try {
+    const saved = JSON.parse(localStorage.getItem(cuttingKey) || '[]');
+    if (Array.isArray(saved)) for (const item of saved) addCuttingRow(item);
+} catch {}
+updateCutting();
+
 </script>
 </body>
 </html>
