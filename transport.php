@@ -638,8 +638,8 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <?php endif ?>
 </section>
 <section id="unload-directory">
-<h2>Punkt rozładunku</h2>
-<label>Szukaj punktu<input type="search" id="unload-search" placeholder="Firma, miejscowość lub kierownik"></label>
+<h2>Budowy</h2>
+<label>Szukaj budowy<input type="search" id="unload-search" placeholder="Firma, miejscowość lub kierownik"></label>
 <div class="directory-buttons">
 <div class="carrier-row" data-unload-search="JURKO Warszawa">
 <button type="button" data-unload="JURKO, Al. Jerozolimskie 229, 02-495 Warszawa">JURKO · Al. Jerozolimskie 229</button>
@@ -662,7 +662,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 </div>
 <p id="unload-empty" hidden role="status">Brak pasujących punktów.</p>
 <?php if ($owner): ?>
-<button type="button" id="add-unload">Dodaj punkt rozładunku</button>
+<button type="button" id="add-unload">Dodaj budowę</button>
 <dialog id="unload-editor" aria-labelledby="unload-editor-title">
 <h3 id="unload-editor-title">Punkt rozładunku</h3>
 <form method="post">
@@ -678,7 +678,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 </dialog>
 <?php endif ?>
 </section>
-<section><h2>Obostrzenia dostawy</h2><a href="#delivery-restrictions">Zaznacz warunki dostawy</a></section>
+
 
 
 <?php if ($owner): ?>
@@ -743,7 +743,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 </details></div>
 <section id="delivery-restrictions">
 <details open><summary>Obostrzenia dostawy</summary>
-<table><thead><tr><th scope="col">Warunek do uwzględnienia</th><th scope="col">Wymagany</th></tr></thead><tbody>
+<table><thead><tr><th scope="col">Warunek do uwzględnienia</th><th scope="col">Wymagany<br><button type="button" data-set-delivery="all">Zaznacz wszystkie</button> <button type="button" data-set-delivery="none">Odznacz wszystkie</button></th></tr></thead><tbody>
 <?php foreach (['Kod rozładunku / awizacji','Auto z HDS','Auto z windą','Utwardzony plac do rozładunku','Auto bez plandeki','Ograniczenie tonażowe / zezwolenie','Dostawa o ustalonej godzinie lub w nocy','Oznakowanie świetlne lub dźwiękowe','Rozładunek zapewnia budowa'] as $restriction): ?>
 <tr><td><?=e($restriction)?></td><td><input type="checkbox" data-delivery-condition="<?=e($restriction)?>" aria-label="<?=e($restriction)?>"></td></tr>
 <?php endforeach ?>
@@ -757,13 +757,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 
 </div>
 <aside class="transport-messages" aria-label="Wiadomości transportowe">
-<section><h2>Budowy</h2><a href="#unload-directory">Wybierz budowę</a><br><details id="building-email"><summary>E-mail do budowy</summary>
-<label>Treść e-maila<textarea id="building-preview" rows="8" readonly></textarea></label>
-<label>Adresy e-mail (oddziel przecinkami)<input id="building-recipient" type="email" multiple maxlength="254"></label>
-<div id="building-recipients" role="group" aria-label="Odbiorcy wiadomości"></div>
-<a class="button" id="building-mail" hidden>Wyślij</a>
-<small>Otwiera wiadomość w programie pocztowym.</small>
-</details></section>
+
 
 <section>
 <h2>Zlecenie do przewoźnika</h2>
@@ -785,6 +779,13 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <a id="factory-mail" hidden>Otwórz e-mail do fabryki</a>
 </section>
 
+<section><h2>Budowy</h2><a href="#unload-directory">Wybierz budowę</a><br><details id="building-email"><summary>E-mail do budowy</summary>
+<label>Treść e-maila<textarea id="building-preview" rows="8" readonly></textarea></label>
+<label>Adresy e-mail (oddziel przecinkami)<input id="building-recipient" type="email" multiple maxlength="254"></label>
+<div id="building-recipients" role="group" aria-label="Odbiorcy wiadomości"></div>
+<a class="button" id="building-mail" hidden>Wyślij</a>
+<small>Otwiera wiadomość w programie pocztowym.</small>
+</details></section>
 </aside>
 
 <section class="transport-history" id="transport-history" <?=($search === '' && ($_GET['unbilled'] ?? '') !== '1' && !isset($_GET['history'])) ? 'hidden' : ''?>>
@@ -1197,6 +1198,12 @@ buildingRecipient.addEventListener('input', () => {
 buildingRecipients.addEventListener('change', updatePreviews);
 const deliveryCode = document.getElementById('delivery-code');
 const deliveryConditions = [...document.querySelectorAll('[data-delivery-condition]')];
+for (const button of document.querySelectorAll('[data-set-delivery]')) {
+    button.addEventListener('click', () => {
+        for (const checkbox of deliveryConditions) checkbox.checked = button.dataset.setDelivery === 'all';
+        updatePreviews();
+    });
+}
 const orderNotes = orderForm.elements.namedItem('notes');
 const restrictionsHeading = '\n\nObostrzenia dostawy:\n';
 const savedRestrictions = orderNotes.value.match(/(?:^|\n\n)Obostrzenia dostawy:\n([\s\S]*)$/);
