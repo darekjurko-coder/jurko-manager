@@ -416,7 +416,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 #factory-entry-handle{cursor:move;touch-action:none;user-select:none}#factory-entry-handle button{cursor:pointer}
 .transport-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;margin-bottom:8px}
 .transport-heading h1{margin:0}.transport-heading .button{min-width:min(220px,100%);text-align:center;box-sizing:border-box}
-.cutting-panel{grid-column:1/-1;background:#fff;border:1px solid #d8e1dc;border-radius:8px;padding:12px}.cutting-tab{display:block;text-align:center}.cutting-scroll{overflow:auto;margin:10px 0}.cutting-scroll table{min-width:1150px}.cutting-scroll input{width:72px;margin:2px}.cutting-scroll td:first-child input{width:135px}.cutting-scroll td:nth-child(4),.cutting-scroll td:nth-child(5){white-space:nowrap}.cutting-scroll td:nth-child(4) input,.cutting-scroll td:nth-child(5) input{width:46px}.cutting-scroll output{display:block;white-space:pre-line;min-width:170px}
+.cutting-panel{grid-column:1/-1;background:#fff;border:1px solid #d8e1dc;border-radius:8px;padding:12px}.cutting-content{grid-column:2/-1}.cutting-scroll{overflow:auto;margin:10px 0}.cutting-scroll table{min-width:1150px}.cutting-scroll input{width:72px;margin:2px}.cutting-scroll td:first-child input{width:135px}.cutting-scroll td:nth-child(4),.cutting-scroll td:nth-child(5){white-space:nowrap}.cutting-scroll td:nth-child(4) input,.cutting-scroll td:nth-child(5) input{width:46px}.cutting-scroll output{display:block;white-space:pre-line;min-width:170px}
 </style>
 </head>
 <body>
@@ -427,8 +427,44 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </nav></header>
 <?php endif ?>
 <main>
+<?php $cuttingView = ($_GET['view'] ?? '') === 'cutting'; ?>
+<?php if ($cuttingView): ?>
 <div class="transport-layout">
 <div class="transport-sidebar">
+<a class="button" href="<?=e($transportUrl)?>">Transport zewnętrzny</a>
+<a class="button" href="<?=e($transportQuery.'view=cutting')?>" aria-current="page">Cięcie</a>
+</div>
+<div class="transport-content cutting-content">
+<section id="cutting" class="cutting-panel">
+<h1>Cięcie · wycena netto</h1>
+<div class="cutting-scroll"><table>
+<thead><tr><th>Pozycja</th><th>Ilość</th><th>Jednostka</th><th>Płytka (cm)</th><th>Element (cm)</th><th>Elementy z płytki</th><th>Materiał PLN/m²</th><th>Cięcie netto</th><th>Rozkrój</th><th>Narzut %</th><th>Wynik</th><th></th></tr></thead>
+<tbody id="cutting-rows"></tbody>
+</table></div>
+<div class="actions"><button type="button" id="cutting-add">Dodaj pozycję</button><button type="button" id="cutting-example">Dodaj przykłady</button></div>
+<p id="cutting-total" role="status"></p>
+<template id="cutting-row">
+<tr>
+<td><input aria-label="Nazwa pozycji" data-field="name" maxlength="150"></td>
+<td><input aria-label="Ilość" data-field="qty" inputmode="decimal"></td>
+<td><select aria-label="Jednostka ilości" data-field="unit"><option>szt.</option><option>m²</option><option>mb</option></select></td>
+<td><input aria-label="Długość płytki" data-field="tileL" inputmode="decimal"> × <input aria-label="Szerokość płytki" data-field="tileW" inputmode="decimal"></td>
+<td><input aria-label="Długość elementu" data-field="partL" inputmode="decimal"> × <input aria-label="Szerokość elementu" data-field="partW" inputmode="decimal"></td>
+<td><input aria-label="Elementy z płytki, opcjonalna korekta" placeholder="Auto" data-field="yield" inputmode="numeric"></td>
+<td><input aria-label="Cena materiału za metr kwadratowy" data-field="material" inputmode="decimal"></td>
+<td><input aria-label="Koszt obróbki za sztukę" placeholder="PLN/szt." data-field="finish" inputmode="decimal"><input aria-label="Cena obróbki dla klienta za sztukę" placeholder="Klient PLN/szt." data-field="client" inputmode="decimal"></td>
+<td><input aria-label="Metry rozkroju na płytkę" placeholder="mb/płytkę" data-field="cutLength" inputmode="decimal"><input aria-label="Koszt rozkroju za metr" placeholder="PLN/mb" data-field="cutRate" inputmode="decimal"></td>
+<td><input aria-label="Narzut na usługi" data-field="markup" inputmode="decimal"></td>
+<td><output></output></td><td><button type="button" data-remove aria-label="Usuń pozycję">×</button></td>
+</tr>
+</template>
+</section>
+</div>
+</div>
+<?php else: ?>
+<div class="transport-layout">
+<div class="transport-sidebar">
+<a class="button" href="<?=e($transportQuery.'view=cutting')?>">Cięcie</a>
 <aside class="factory-menu" aria-label="Fabryki">
 <div class="factory-heading"><h2>Fabryki</h2><?php if ($owner): ?><button type="button" id="add-factory" aria-label="Dodaj fabrykę" title="Dodaj fabrykę">+</button><?php endif ?></div>
 <div id="factory-shortcuts"></div>
@@ -561,9 +597,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 
 </div>
 <aside class="transport-messages" aria-label="Wiadomości transportowe">
-<section>
-<a class="button cutting-tab" href="#cutting">Cięcie</a>
-</section>
+
 <section>
 <h2>Zlecenie do przewoźnika</h2>
 <label>Treść wiadomości<textarea id="carrier-preview" rows="6" readonly></textarea></label>
@@ -585,30 +619,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </section>
 
 </aside>
-<details id="cutting" class="cutting-panel">
-<summary>Cięcie · wycena netto</summary>
-<div class="cutting-scroll"><table>
-<thead><tr><th>Pozycja</th><th>Ilość</th><th>Jednostka</th><th>Płytka (cm)</th><th>Element (cm)</th><th>Elementy z płytki</th><th>Materiał PLN/m²</th><th>Cięcie netto</th><th>Rozkrój</th><th>Narzut %</th><th>Wynik</th><th></th></tr></thead>
-<tbody id="cutting-rows"></tbody>
-</table></div>
-<div class="actions"><button type="button" id="cutting-add">Dodaj pozycję</button><button type="button" id="cutting-example">Dodaj przykłady</button></div>
-<p id="cutting-total" role="status"></p>
-<template id="cutting-row">
-<tr>
-<td><input aria-label="Nazwa pozycji" data-field="name" maxlength="150"></td>
-<td><input aria-label="Ilość" data-field="qty" inputmode="decimal"></td>
-<td><select aria-label="Jednostka ilości" data-field="unit"><option>szt.</option><option>m²</option><option>mb</option></select></td>
-<td><input aria-label="Długość płytki" data-field="tileL" inputmode="decimal"> × <input aria-label="Szerokość płytki" data-field="tileW" inputmode="decimal"></td>
-<td><input aria-label="Długość elementu" data-field="partL" inputmode="decimal"> × <input aria-label="Szerokość elementu" data-field="partW" inputmode="decimal"></td>
-<td><input aria-label="Elementy z płytki, opcjonalna korekta" placeholder="Auto" data-field="yield" inputmode="numeric"></td>
-<td><input aria-label="Cena materiału za metr kwadratowy" data-field="material" inputmode="decimal"></td>
-<td><input aria-label="Koszt obróbki za sztukę" placeholder="PLN/szt." data-field="finish" inputmode="decimal"><input aria-label="Cena obróbki dla klienta za sztukę" placeholder="Klient PLN/szt." data-field="client" inputmode="decimal"></td>
-<td><input aria-label="Metry rozkroju na płytkę" placeholder="mb/płytkę" data-field="cutLength" inputmode="decimal"><input aria-label="Koszt rozkroju za metr" placeholder="PLN/mb" data-field="cutRate" inputmode="decimal"></td>
-<td><input aria-label="Narzut na usługi" data-field="markup" inputmode="decimal"></td>
-<td><output></output></td><td><button type="button" data-remove aria-label="Usuń pozycję">×</button></td>
-</tr>
-</template>
-</details>
+
 <section class="transport-history" id="transport-history" <?=($search === '' && ($_GET['unbilled'] ?? '') !== '1' && !isset($_GET['history'])) ? 'hidden' : ''?>>
 <h2>Wcześniejsze zlecenia</h2>
 <form method="get" class="actions">
@@ -653,8 +664,10 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <?php endif ?>
 </section>
 </div>
+<?php endif ?>
 </main>
 <script nonce="<?=e($nonce)?>">
+<?php if (!$cuttingView): ?>
 const country = document.getElementById('factory-country');
 const names = <?=json_encode(FACTORIES, JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 if (country) {
@@ -1114,7 +1127,7 @@ if (country) {
 }
 bindTransportPhoto('pickup',paste,message,splitPickup);
 
-const cutting = document.getElementById('cutting');
+<?php else: ?>
 const cuttingRows = document.getElementById('cutting-rows');
 const cuttingKey = 'jurko-cutting-v1';
 const cuttingMoney = new Intl.NumberFormat('pl-PL',{style:'currency',currency:'PLN'});
@@ -1180,8 +1193,6 @@ const cuttingExamples = [
     {name:'Cokół 8 × 60',tileL:'60',tileW:'60',partL:'60',partW:'8',finish:'5,50'},
     {name:'Cokół 8 × 120',tileL:'120',tileW:'60',partL:'120',partW:'8',finish:'5,50'}
 ];
-document.querySelector('.cutting-tab').addEventListener('click',() => { cutting.open = true; });
-if (location.hash === '#cutting') cutting.open = true;
 document.getElementById('cutting-add').addEventListener('click',() => { addCuttingRow(); updateCutting(); });
 document.getElementById('cutting-example').addEventListener('click',() => {
     for (const example of cuttingExamples) addCuttingRow({qty:'50',unit:'m²',material:'150',markup:'13',...example});
@@ -1199,6 +1210,7 @@ try {
 } catch {}
 updateCutting();
 
+<?php endif ?>
 </script>
 </body>
 </html>
