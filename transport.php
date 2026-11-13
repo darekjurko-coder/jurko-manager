@@ -148,7 +148,7 @@ try {
                     }
                     $query->execute([$email]);
                     break;
-                case 'carrier_nip':
+                case 'carrier_edit':
                     if (!$owner) {
                         throw new DomainException('Kartotekę edytuje właściciel.');
                     }
@@ -157,8 +157,23 @@ try {
                     if ($nip !== '' && !preg_match('/^[0-9]{10}$/D', $nip)) {
                         throw new InvalidArgumentException('NIP powinien mieć 10 cyfr.');
                     }
-                    $query = $db->prepare("UPDATE jm_transport_directory SET nip=? WHERE id=? AND kind='carrier'");
-                    $query->execute([$nip, $carrierId]);
+                    $name = field('name', 150, true);
+                    $email = field('email', 254);
+                    $phone = preg_replace('/[ +()-]/', '', field('phone', 30));
+                    if (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) ||
+                        ($phone !== '' && !preg_match('/^[1-9][0-9]{7,14}$/D', $phone)) ||
+                        ($email === '' && $phone === '')) {
+                        throw new InvalidArgumentException('Podaj poprawny e-mail lub numer WhatsApp z kodem kraju.');
+                    }
+                    try {
+                        $query = $db->prepare("UPDATE jm_transport_directory SET name=?,email=?,phone=?,nip=? WHERE id=? AND kind='carrier'");
+                        $query->execute([$name, $email, $phone, $nip, $carrierId]);
+                    } catch (PDOException $exception) {
+                        if (($exception->errorInfo[1] ?? null) === 1062) {
+                            throw new InvalidArgumentException('Firma o tej nazwie już istnieje w kartotece.');
+                        }
+                        throw $exception;
+                    }
                     break;
                 case 'directory':
                     if (!$owner) {
@@ -431,6 +446,10 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 @media(max-width:1050px){.shipment-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .directory-buttons{display:grid;gap:4px;margin:6px 0}
 .directory-buttons button{text-align:left;background:#f1f2f3;color:#293238;white-space:normal;overflow-wrap:anywhere}
+.carrier-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}
+.carrier-row[hidden]{display:none}
+.carrier-row .carrier-edit{background:transparent;color:#5f6870;font-size:.75rem;padding:3px 7px}
+.carrier-row .carrier-edit:focus-visible{outline:2px solid currentColor}
 .directory-buttons button:hover{background:#e0e3e6}
 .selected-carrier{background:#f6f6f6;padding:8px;line-height:1.6;overflow-wrap:anywhere}
 .shipment-photo{margin-top:8px;min-height:70px}#unload-directory form{display:grid;gap:5px;margin-top:6px}
@@ -531,25 +550,43 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 </form>
 </details>
 <?php endif ?>
-<details><summary>Wybierz przewoźnika</summary>
-<div class="directory-buttons">
-<?php foreach ($carriers as $item): ?><button type="button" data-carrier="<?=e($item['id'])?>"><?=e($item['name'])?></button><?php endforeach ?>
-<?php if (!$carriers): ?><p>Brak zapisanych przewoźników.</p><?php endif ?>
+<?php
+$renderCarrier = static function (array $item) use ($owner): void {
+?>
+<div class="carrier-row" data-carrier-search="<?=e($item['name'].' '.$item['nip'])?>">
+<button type="button" data-carrier="<?=e($item['id'])?>"><?=e($item['name'])?></button>
+<?php if ($owner): ?>
+<button type="button" class="carrier-edit" data-edit-carrier="<?=e($item['id'])?>" aria-label="<?=e('Popraw dane: '.$item['name'])?>" title="Popraw dane">P</button>
+<?php endif ?>
 </div>
-<?php if ($owner && $carriers): ?>
-<details><summary>Edytuj NIP przewoźnika</summary>
-<?php foreach ($carriers as $item): ?>
+<?php
+};
+?>
+<div class="directory-buttons">
+<?php foreach (array_slice($carriers, 0, 3) as $item) $renderCarrier($item); ?>
+</div>
+<details><summary>Wybierz przewoźnika</summary>
+<label>Szukaj przewoźnika<input id="carrier-search" type="search" placeholder="Nazwa lub NIP"></label>
+<div id="carrier-picker" class="directory-buttons">
+<?php foreach ($carriers as $item) $renderCarrier($item); ?>
+</div>
+<p id="carrier-no-results" role="status" <?=$carriers ? 'hidden' : ''?>>Brak pasujących przewoźników.</p>
+</details>
+<?php if ($owner): ?>
+<dialog id="carrier-editor" aria-labelledby="carrier-editor-title">
+<h3 id="carrier-editor-title">Popraw dane przewoźnika</h3>
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>">
-<input type="hidden" name="action" value="carrier_nip">
-<input type="hidden" name="directory_id" value="<?=e($item['id'])?>">
-<label>NIP · <?=e($item['name'])?><input name="nip" inputmode="numeric" maxlength="30" value="<?=e($item['nip'])?>"></label>
-<button>Zapisz NIP</button>
+<input type="hidden" name="action" value="carrier_edit">
+<input type="hidden" name="directory_id">
+<label>Nazwa firmy<input name="name" maxlength="150" required></label>
+<label>E-mail<input name="email" type="email" maxlength="254"></label>
+<label>Telefon do SMS / WhatsApp<input name="phone" type="tel" maxlength="30"></label>
+<label>NIP<input name="nip" inputmode="numeric" maxlength="30"></label>
+<div class="actions"><button type="submit">Zapisz zmiany</button><button type="button" id="close-carrier-editor">Anuluj</button></div>
 </form>
-<?php endforeach ?>
-</details>
+</dialog>
 <?php endif ?>
-</details>
 </section>
 <section id="unload-directory">
 <h2>Punkt rozładunku</h2>
@@ -964,6 +1001,30 @@ historyLink.addEventListener('click', event => {
     if (!orderHistory.hidden) orderHistory.scrollIntoView({block:'nearest'});
 });
 const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','name','address','email','phone','nip'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
+const carrierSearch = document.getElementById('carrier-search');
+const carrierRows = [...document.querySelectorAll('#carrier-picker .carrier-row')];
+carrierSearch.addEventListener('input', () => {
+    const search = carrierSearch.value.trim().toLocaleLowerCase('pl');
+    for (const row of carrierRows) {
+        row.hidden = !row.dataset.carrierSearch.toLocaleLowerCase('pl').includes(search);
+    }
+    document.getElementById('carrier-no-results').hidden = carrierRows.some(row => !row.hidden);
+});
+const carrierEditor = document.getElementById('carrier-editor');
+if (carrierEditor) {
+    const fields = carrierEditor.querySelector('form').elements;
+    document.getElementById('close-carrier-editor').addEventListener('click', () => carrierEditor.close());
+    for (const button of document.querySelectorAll('[data-edit-carrier]')) {
+        button.addEventListener('click', () => {
+            const contact = carrierContacts[button.dataset.editCarrier];
+            fields.namedItem('directory_id').value = contact.id;
+            for (const name of ['name', 'email', 'phone', 'nip']) {
+                fields.namedItem(name).value = contact[name] ?? '';
+            }
+            carrierEditor.showModal();
+        });
+    }
+}
 const selectedCarrier = document.getElementById('selected-carrier');
 function showCarrier() {
     const contact = carrierContacts[carrier.value];
