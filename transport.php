@@ -523,6 +523,8 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .carrier-row[hidden]{display:none}
 #unload-editor{width:min(520px,90vw);max-height:85vh;overflow:auto}
 #unload-directory input,#unload-directory textarea{width:100%}
+#carrier-picker [data-carrier],#carrier-picker .carrier-edit{font-weight:400}
+#carrier-picker .carrier-row[hidden]{display:none}
 #carrier-picker{max-height:24rem;overflow-y:auto}
 #carrier-picker + p + label{display:block;margin-top:8px}
 .carrier-row .carrier-edit{background:transparent;color:#5f6870;font-size:.75rem;padding:3px 7px}
@@ -614,31 +616,27 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <?php endif ?>
 </aside>
 <section class="carrier-directory">
-<h2>Przewoźnik</h2>
+<div class="factory-heading"><h2>Przewoźnik</h2><?php if ($owner): ?><button type="button" id="add-carrier" aria-label="Dodaj firmę transportową" title="Dodaj firmę transportową">+</button><?php endif ?></div>
 <?php
 $renderCarrier = static function (array $item) use ($owner): void {
 ?>
 <div class="carrier-row" data-carrier-search="<?=e($item['name'].' '.$item['nip'])?>">
 <button type="button" data-carrier="<?=e($item['id'])?>"><?=e($item['name'])?></button>
 <?php if ($owner): ?>
-<button type="button" class="carrier-edit" data-edit-carrier="<?=e($item['id'])?>" aria-label="<?=e('Popraw dane: '.$item['name'])?>" title="Popraw dane">P</button>
+<button type="button" class="carrier-edit" data-edit-carrier="<?=e($item['id'])?>" aria-label="<?=e('Modyfikuj przewoźnika: '.$item['name'])?>">Modyfikuj</button>
 <?php endif ?>
 </div>
 <?php
 };
 ?>
-<div class="directory-buttons">
-<?php foreach (array_slice($carriers, 0, 3) as $item) $renderCarrier($item); ?>
-</div>
-<details><summary>Wybierz przewoźnika</summary>
 <div id="carrier-picker" class="directory-buttons">
 <?php foreach ($carriers as $item) $renderCarrier($item); ?>
 </div>
 <p id="carrier-no-results" role="status" <?=$carriers ? 'hidden' : ''?>>Brak pasujących przewoźników.</p>
 <label>Szukaj przewoźnika<input id="carrier-search" type="search" placeholder="Nazwa lub NIP"></label>
-</details>
 <?php if ($owner): ?>
-<details><summary>Dodaj firmę transportową</summary>
+<dialog id="carrier-add-dialog" aria-labelledby="carrier-add-title">
+<h3 id="carrier-add-title">Dodaj firmę transportową</h3>
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="carrier">
 <label>Nazwa firmy<input id="carrier-name" name="name" maxlength="150" required></label>
@@ -648,9 +646,9 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <label>Wklej zdjęcie lub tekst<textarea id="carrier-photo-text" rows="3" maxlength="12000"></textarea></label>
 <button type="button" id="fill-carrier-fields">Uzupełnij pola z tekstu</button>
 <p id="carrier-photo-status" class="muted" role="status"></p>
-<button>Zapisz przewoźnika</button>
+<div class="actions"><button>Zapisz przewoźnika</button><button type="button" id="close-carrier-add">Anuluj</button></div>
 </form>
-</details>
+</dialog>
 <?php endif ?>
 <?php if ($owner): ?>
 <dialog id="carrier-editor" aria-labelledby="carrier-editor-title">
@@ -1181,6 +1179,11 @@ carrierSearch.addEventListener('input', () => {
     }
     document.getElementById('carrier-no-results').hidden = carrierRows.some(row => !row.hidden);
 });
+const carrierAddDialog = document.getElementById('carrier-add-dialog');
+if (carrierAddDialog) {
+    document.getElementById('add-carrier').addEventListener('click', () => carrierAddDialog.showModal());
+    document.getElementById('close-carrier-add').addEventListener('click', () => carrierAddDialog.close());
+}
 const carrierEditor = document.getElementById('carrier-editor');
 if (carrierEditor) {
     const fields = carrierEditor.querySelector('form').elements;
