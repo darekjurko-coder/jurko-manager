@@ -785,6 +785,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <h2>Zlecenie do przewoźnika</h2>
 <label>Treść wiadomości<textarea id="carrier-preview" rows="6" readonly></textarea></label>
 <div class="actions"><a class="button" id="carrier-mail" aria-disabled="true">E-mail</a><a class="button" id="carrier-whatsapp" aria-disabled="true" target="_blank" rel="noopener noreferrer">WhatsApp</a><a class="button" id="carrier-sms" aria-disabled="true">SMS</a><span id="carrier-recipient" class="muted" style="overflow-wrap:anywhere" hidden></span></div>
+<label>E-mail pracownika (DW)<input id="carrier-cc" type="email" maxlength="254"></label>
 <p id="carrier-channel-status" class="muted" role="status"></p>
 </section>
 <section>
@@ -1148,12 +1149,6 @@ function pickupRows() {
         [...row.querySelectorAll('[data-pickup]')].map(input => [input.dataset.pickup,input.value.trim()])
     )).filter(point => Object.values(point).some(Boolean));
 }
-function pickupLines() {
-    return pickupRows().map((point,index) => ['Punkt odbioru '+(index+2),
-        [point.address || 'Brak adresu', point.reference && 'dyspozycja '+point.reference,
-        point.weight && point.weight+' kg', point.date && 'odbiór '+point.date,
-        point.pallets && point.pallets+' pal.'].filter(Boolean).join(' · ')]);
-}
 const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','name','address','email','phone','nip'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 const carrierSearch = document.getElementById('carrier-search');
 const carrierRows = [...document.querySelectorAll('#carrier-picker .carrier-row')];
@@ -1323,6 +1318,7 @@ for (const button of document.querySelectorAll('[data-unload]')) {
         deliveryAddress.dispatchEvent(new Event('input', {bubbles:true}));
     });
 }
+const carrierCc = document.getElementById('carrier-cc');
 const carrierPreview = document.getElementById('carrier-preview');
 const factoryPreview = document.getElementById('factory-preview');
 const email = document.getElementById('factory-email');
@@ -1360,13 +1356,21 @@ function updatePreviews() {
     const subject = 'Odbiór z fabryki ' + (brandInput.value || '—') + (referenceNumber ? ' · ' + referenceNumber : '');
     const common = [['Fabryka',brandInput.value],['Adres odbioru',value('pickup_address')],
         ['Numer dyspozycji',referenceNumber],['Data odbioru',value('pickup')]];
-    const shipment = [['Odbiór z',value('pickup_address') || '—'],['Dostawa do',value('delivery_address') || '—'],
-        common[0],common[2],common[3],['Data dostawy',value('delivery')],
-        ['Waga brutto',value('weight') && value('weight')+' kg'],['Liczba palet',value('pallets')],
-        ...pickupLines(),['Uwagi',value('notes')],['Obostrzenia dostawy',selectedRestrictions()]];
     const driver = [...common,...driverFields.map((field,index) => [['Kierowca','Telefon','Rejestracja'][index],field.value.trim()])];
     const compose = (intro, fields) => 'Dzień dobry,\n'+intro+'\n\n'+fields.filter(([,text])=>text).map(([label,text])=>label+': '+text).join('\n');
-    carrierPreview.value = compose('Proszę o odbiór i dostarczenie przesyłki.',shipment);
+    const pickupFields = [common, ...pickupRows().map(point => [
+        ['Adres odbioru', point.address], ['Numer dyspozycji', point.reference],
+        ['Data odbioru', point.date], ['Waga brutto', point.weight && point.weight+' kg'],
+        ['Liczba palet', point.pallets]
+    ])];
+    pickupFields[0].push(['Waga brutto', value('weight') && value('weight')+' kg'], ['Liczba palet', value('pallets')]);
+    const lines = fields => fields.filter(([,text]) => text).map(([label,text]) => label+': '+text).join('\n');
+    carrierPreview.value = [
+        'Dzień dobry,\nProszę o odbiór i dostarczenie przesyłek.',
+        ...pickupFields.map((fields,index) => 'Punkt odbioru '+(index+1)+'\n'+lines(fields)),
+        lines([['Dostawa do',value('delivery_address')],['Data dostawy',value('delivery')]]),
+        lines([['Uwagi',value('notes')],['Obostrzenia dostawy',selectedRestrictions()]])
+    ].filter(Boolean).join('\n\n');
     factoryPreview.value = compose('Przekazuję dane kierowcy do odbioru przesyłki.',driver);
     const contact = carrierContacts[carrier.value];
     const mailto = (address,body) => 'mailto:'+address.split(',').map(item => encodeURIComponent(item).replace(/%40/g,'@')).join(',')+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
@@ -1381,7 +1385,7 @@ function updatePreviews() {
     const hasRoute = Boolean(value('pickup_address') && value('delivery_address'));
     const phone = /^\d{8,15}$/.test(contact?.phone || '') ? contact.phone : '';
     const body = encodeURIComponent(carrierPreview.value);
-    draftLink('carrier-mail', hasRoute && contact?.email ? mailto(contact.email,carrierPreview.value) : '');
+    draftLink('carrier-mail', hasRoute && contact?.email ? mailto(contact.email,carrierPreview.value) + (carrierCc.value.trim() && carrierCc.validity.valid ? '&cc='+encodeURIComponent(carrierCc.value.trim()) : '') : '');
     draftLink('carrier-whatsapp', hasRoute && phone ? 'https://wa.me/'+phone+'?text='+body : '');
     const smsSeparator = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?';
     draftLink('carrier-sms', hasRoute && phone ? 'sms:+'+phone+smsSeparator+'body='+body : '');
@@ -1400,7 +1404,7 @@ function updatePreviews() {
 }
 orderForm.addEventListener('input', updatePreviews);
 orderForm.addEventListener('change', updatePreviews);
-for (const field of [...driverFields,email]) field.addEventListener('input', updatePreviews);
+for (const field of [...driverFields,email,carrierCc]) field.addEventListener('input', updatePreviews);
 updatePreviews();
 let ocrLibrary;
 function bindTransportPhoto(prefix, rawText, photoStatus, fill) {
