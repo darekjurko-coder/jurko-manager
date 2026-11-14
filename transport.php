@@ -482,7 +482,7 @@ main{max-width:1600px}
 @media(max-width:1050px){.transport-layout{grid-template-columns:minmax(125px,.65fr) minmax(0,1.4fr) minmax(185px,1fr)}.transport-messages .grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.transport-layout{display:block}.transport-sidebar,.transport-content,.transport-messages{margin-bottom:16px}}
 
-.pickup-block{display:grid;gap:6px;margin:0 0 8px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
+.pickup-block{display:grid;gap:6px;margin:0 0 8px}.pickup-point-header{display:flex;align-items:end;gap:8px;flex-wrap:wrap}.pickup-point-header>label{flex:1 1 210px;min-width:0}.pickup-point-header select{width:100%}.pickup-point-header .actions{margin:0 0 0 auto}.pickup-point-header button{padding:4px 8px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
 #carrier-recommendations{margin:3px 0 7px}#carrier-recommendations td{padding:5px 0}#carrier-recommendations button{padding:6px 8px}
 .factory-addresses .factory-point{font-weight:400;line-height:1.45}
 .factory-addresses .factory-edit{width:auto;align-self:start;padding:4px 7px;background:transparent;color:#52615a;font-weight:400;font-size:11px}
@@ -768,7 +768,10 @@ foreach ($featuredCarriers as $item) $renderCarrier($item);
 <template id="extra-pickup-template">
 <fieldset class="pickup-block shipment-step">
 <legend>Punkt odbioru</legend>
+<div class="pickup-point-header">
 <label>Zapisany punkt odbioru<select data-pickup-factory></select></label>
+<div class="actions"><button type="button" data-edit-pickup>Modyfikuj</button><button type="button" data-remove-pickup>Usuń</button></div>
+</div>
 <label>Adres odbioru<input data-pickup="address" maxlength="300"></label>
 <div class="shipment-fields compact-pickup-fields">
 <label>Dyspozycja<input data-pickup="reference" maxlength="150"></label>
@@ -776,7 +779,6 @@ foreach ($featuredCarriers as $item) $renderCarrier($item);
 <label>Data odbioru<input data-pickup="date" type="date"></label>
 <label>Liczba palet<input data-pickup="pallets" type="number" min="1" max="999999"></label>
 </div>
-<button type="button" data-remove-pickup>Usuń punkt</button>
 </fieldset>
 </template>
 <div class="pickup-block shipment-step">
@@ -1180,7 +1182,14 @@ function addPickup(values = {}) {
     select.addEventListener('change', () => {
         row.querySelector('[data-pickup="address"]').value = select.selectedOptions[0]?.dataset.address || '';
     });
+    row.querySelector('[data-edit-pickup]').addEventListener('click', () => {
+        const address = row.querySelector('[data-pickup="address"]');
+        address.focus();
+        address.select();
+    });
     row.querySelector('[data-remove-pickup]').addEventListener('click', () => {
+        const point = row.querySelector('legend').textContent;
+        if (!window.confirm('Usunąć z tego zlecenia: '+point+'?')) return;
         row.remove();
         numberPickups();
         updatePreviews();
