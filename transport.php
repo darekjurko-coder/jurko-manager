@@ -66,6 +66,7 @@ function transportNumber(array $order): string
     return 'TR/'.$date->setTimezone(new DateTimeZone('Europe/Warsaw'))->format('Y/m').'/'.str_pad((string)$order['id'], 4, '0', STR_PAD_LEFT);
 }
 
+$accountsView = ($_GET['view'] ?? '') === 'accounts';
 $embedded = ($_GET['panel'] ?? '') === '1';
 
 try {
@@ -83,6 +84,10 @@ try {
     }
     $db = jurkoDatabase();
     $owner = $user['role'] === 'owner';
+    if ($accountsView && !$owner) {
+        http_response_code(403);
+        exit('Ustawienia kont są dostępne dla właściciela.');
+    }
     if ($owner) {
         $actor = jurkoFinanceAccount($db, $user, $config);
     } else {
@@ -159,6 +164,8 @@ try {
         try {
             switch (field('action', 20)) {
                 case 'access':
+                    if (!$accountsView) throw new InvalidArgumentException('Zarządzaj kontami w Ustawieniach.');
+                    $redirect .= ($embedded ? '&' : '?').'view=accounts';
                     if (!$owner) {
                         throw new DomainException('Dostęp zmienia właściciel.');
                     }
@@ -420,6 +427,9 @@ try {
         $query->execute($owner ? [$edit] : [$edit,$actor]);
         $editing = $query->fetch() ?: null;
     }
+    $employeeAccounts = $accountsView
+        ? $db->query("SELECT email, active FROM jm_accounts WHERE role='employee' ORDER BY email")->fetchAll()
+        : [];
     $usage = $db->query("SELECT factory_id, carrier_id, COUNT(*) AS uses FROM jm_transport_orders WHERE status<>'draft' GROUP BY factory_id, carrier_id")->fetchAll();
 } catch (DomainException $exception) {
     http_response_code(403);
@@ -557,7 +567,28 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <?php endif ?>
 <main>
 <?php $cuttingView = ($_GET['view'] ?? '') === 'cutting'; ?>
-<?php if ($cuttingView): ?>
+<?php if ($accountsView): ?>
+<section class="factory-menu">
+<h1>Użytkownicy</h1>
+<p>Pracownik loguje się własnym kontem Google. To uprawnienie daje dostęp do jego zleceń transportowych.</p>
+<?php if ($saved): ?><p class="notice" role="status">Zapisano uprawnienia.</p><?php endif ?>
+<?php if ($error !== ''): ?><p class="notice error" role="alert"><?=e($error)?></p><?php endif ?>
+<form method="post" class="actions">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="access">
+<label>E-mail konta Google<input name="email" type="email" maxlength="254" required></label>
+<button name="access" value="enable">Dodaj lub aktywuj konto</button>
+</form>
+<?php if (!$employeeAccounts): ?><p>Brak kont pracowników.</p><?php endif ?>
+<?php foreach ($employeeAccounts as $account): ?>
+<form method="post" class="actions">
+<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="access">
+<input type="hidden" name="email" value="<?=e($account['email'])?>">
+<span><?=e($account['email'])?> · <?=$account['active'] ? 'Aktywne' : 'Wyłączone'?></span>
+<button name="access" value="<?=$account['active'] ? 'disable' : 'enable'?>"><?=$account['active'] ? 'Dezaktywuj' : 'Aktywuj'?></button>
+</form>
+<?php endforeach ?>
+</section>
+<?php elseif ($cuttingView): ?>
 <div class="transport-layout">
 <div class="transport-sidebar">
 <a class="button" href="<?=e($transportUrl)?>">Transport zewnętrzny</a>
@@ -900,7 +931,8 @@ foreach ($featuredCarriers as $item) $renderCarrier($item);
 <?php endif ?>
 </main>
 <script nonce="<?=e($nonce)?>">
-<?php if (!$cuttingView): ?>
+<?php if ($accountsView): ?>
+<?php elseif (!$cuttingView): ?>
 const country = document.getElementById('factory-country');
 const names = <?=json_encode(FACTORIES, JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 if (country) {
