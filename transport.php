@@ -484,6 +484,11 @@ main{max-width:1600px}
 
 .pickup-block{display:grid;gap:6px;margin:0 0 8px}.pickup-block h3{margin:0}.pickup-block p{margin:0}
 #carrier-recommendations{margin:3px 0 7px}#carrier-recommendations td{padding:5px 0}#carrier-recommendations button{padding:6px 8px}
+.factory-addresses .factory-point{font-weight:400;line-height:1.45}
+.factory-addresses .factory-edit{width:auto;align-self:start;padding:4px 7px;background:transparent;color:#52615a;font-weight:400;font-size:11px}
+.factory-contact-row{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:8px}
+.factory-contact-row input{width:100%;min-width:0}
+.factory-recipients .factory-contact-phone{color:#52615a;font-weight:400;margin-left:6px;white-space:nowrap}
 .factory-addresses{display:grid;gap:5px;margin:6px 0 9px 10px}.factory-addresses[hidden]{display:none}
 .factory-addresses button{font-size:11px}.factory-recipients{display:grid;gap:6px;margin-bottom:8px}
 .factory-recipients label{display:flex;align-items:center;gap:6px;padding:5px 8px;overflow-wrap:anywhere}
@@ -595,10 +600,10 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <label>Kraj<select name="country" required id="factory-country"><?php foreach (FACTORIES as $country => $names): ?><option><?=e($country)?></option><?php endforeach ?></select></label>
 <label>Fabryka<input id="directory-factory" name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
 <label>Adres odbioru<input id="directory-address" name="address" maxlength="300" required></label>
-<label>E-mail kontaktu 1<input id="directory-emails" name="email" type="email" maxlength="254"></label>
-<label>Telefon kontaktu 1<input id="directory-phone" name="phone" type="tel" maxlength="30"></label>
-<label>E-mail kontaktu 2<input id="directory-email-2" name="email_2" type="email" multiple maxlength="254"></label>
-<label>Telefon kontaktu 2<input id="directory-phone-2" name="phone_2" type="tel" maxlength="30"></label>
+<div class="factory-contact-row"><label>E-mail kontaktu 1<input id="directory-emails" name="email" type="email" maxlength="254"></label>
+<label>Telefon kontaktu 1<input id="directory-phone" name="phone" type="tel" maxlength="30"></label></div>
+<div class="factory-contact-row"><label>E-mail kontaktu 2<input id="directory-email-2" name="email_2" type="email" multiple maxlength="254"></label>
+<label>Telefon kontaktu 2<input id="directory-phone-2" name="phone_2" type="tel" maxlength="30"></label></div>
 <label>Zdjęcie z danymi<input id="factory-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
 <label>Tekst ze zdjęcia lub schowka<textarea id="factory-photo-text" rows="3" maxlength="12000"></textarea></label>
 <button type="button" id="fill-factory-fields">Uzupełnij pola z tekstu</button>
@@ -1036,9 +1041,10 @@ function addFactory(container, brand) {
     for (const point of brand.points) {
         const pointRow = document.createElement('div');
         pointRow.className = 'factory-row';
-        addButton(pointRow, point.address, () => selectPoint(point));
+        addButton(pointRow, point.address, () => selectPoint(point)).classList.add('factory-point');
         if (country) {
             const edit = addButton(pointRow, 'Modyfikuj', () => openFactoryEntry(point));
+            edit.classList.add('factory-edit');
             edit.setAttribute('aria-label','Modyfikuj punkt odbioru: '+point.address);
         }
         addresses.append(pointRow);
@@ -1338,7 +1344,7 @@ const carrierCc = document.getElementById('carrier-cc');
 const carrierPreview = document.getElementById('carrier-preview');
 const factoryPreview = document.getElementById('factory-preview');
 const email = document.getElementById('factory-email');
-let previousDraftBrand = null;
+let previousFactoryRecipients = null;
 const driverFields = ['driver-name','driver-phone','driver-plate'].map(id => document.getElementById(id));
 function draftLink(id, url) {
     const link = document.getElementById(id);
@@ -1349,23 +1355,38 @@ function draftLink(id, url) {
 }
 function updatePreviews() {
     const value = name => orderForm.elements.namedItem(name).value.trim();
-    if (previousDraftBrand !== brandInput.value) {
-        previousDraftBrand = brandInput.value;
-        const addresses = [...new Set((directory.get(normalize(brandInput.value))?.points || [])
-            .flatMap(point => (point.email || '').split(',').map(address => address.trim())).filter(Boolean))];
+    const selectedPoint = points.find(point => String(point.id) === factory.value &&
+        normalize(point.name) === normalize(brandInput.value));
+    const recipientKey = JSON.stringify([brandInput.value, selectedPoint?.id]);
+    if (previousFactoryRecipients !== recipientKey) {
+        previousFactoryRecipients = recipientKey;
+        const factoryPoints = selectedPoint ? [selectedPoint] : directory.get(normalize(brandInput.value))?.points || [];
+        const contacts = new Map();
+        for (const point of factoryPoints) {
+            (point.email || '').split(',').forEach((entry, index) => {
+                const address = entry.trim();
+                const phone = index === 0 ? point.phone : index === 1 ? point.phone_2 : '';
+                if (address && (!contacts.has(address) || phone)) contacts.set(address, phone);
+            });
+        }
         const list = document.getElementById('factory-emails');
         list.replaceChildren();
-        for (const address of addresses) {
+        for (const [address, phone] of contacts) {
             const label = document.createElement('label');
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = address;
-            checkbox.checked = true;
             checkbox.addEventListener('change', updatePreviews);
             label.append(checkbox, address);
+            if (phone) {
+                const number = document.createElement('span');
+                number.className = 'factory-contact-phone';
+                number.textContent = '· tel. '+phone;
+                label.append(number);
+            }
             list.append(label);
         }
-        if (brandInput.value && !addresses.length) list.textContent = 'Brak zapisanych adresów e-mail tej fabryki.';
+        if (brandInput.value && !contacts.size) list.textContent = 'Brak zapisanych adresów e-mail tej fabryki.';
         email.value = '';
     }
     const referenceNumber = value('reference');
