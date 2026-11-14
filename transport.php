@@ -511,6 +511,9 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .transport-sidebar .catalog-more{margin:4px 0 8px}
 .transport-sidebar .catalog-more summary{cursor:pointer;color:#52615a;font-weight:400}
 #factory-shortcuts[hidden],.catalog-more[hidden]{display:none}.carrier-directory form,.shipment-step details{display:grid;gap:5px}
+#carrier-editor{box-sizing:border-box;width:min(540px,calc(100% - 24px));max-height:calc(100% - 24px);padding:18px;border:1px solid #dce0e3;border-radius:8px;color:inherit;overflow:auto}
+#carrier-editor::backdrop{background:#18292066}
+#carrier-editor textarea{display:block;width:100%;box-sizing:border-box;min-height:3.5em;resize:vertical;overflow-wrap:anywhere}
 .carrier-directory input{width:100%}.carrier-names{margin:6px 0 0;padding-left:18px}
 [id$="-photo-status"]:empty,#pickup-message:empty{display:none}
 .shipment-header{display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:7px}
@@ -677,7 +680,7 @@ foreach ($featuredCarriers as $item) $renderCarrier($item);
 <input type="hidden" name="csrf" value="<?=$csrf?>">
 <input type="hidden" name="action" value="carrier_edit">
 <input type="hidden" name="directory_id">
-<label>Nazwa firmy<input name="name" maxlength="150" required></label>
+<label>Nazwa firmy<textarea name="name" rows="2" maxlength="150" required></textarea></label>
 <label>E-mail<input name="email" type="email" maxlength="254"></label>
 <label>Telefon do SMS / WhatsApp<input name="phone" type="tel" maxlength="30"></label>
 <label>NIP<input name="nip" inputmode="numeric" maxlength="30"></label>
