@@ -229,7 +229,7 @@ try {
                         throw new InvalidArgumentException('Podaj poprawny e-mail lub numer WhatsApp z kodem kraju.');
                     }
                     if ($kind === 'unload') {
-                        $profile = [];
+                        $profile = ['directory_group' => choice('directory_group', ['1','2'])];
                         foreach ($unloadFields as $key => [$label, $length]) {
                             $profile[$key] = field($key, $length);
                         }
@@ -530,7 +530,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .carrier-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}
 .carrier-row[hidden]{display:none}
 #unload-editor{width:min(520px,90vw);max-height:85vh;overflow:auto}
-#unload-directory input,#unload-directory textarea{width:100%}
+.unload-directory input,#unload-editor input,#unload-editor textarea,#unload-editor select{width:100%}
 #carrier-picker .carrier-edit{font-weight:400}
 #carrier-picker .carrier-row[hidden]{display:none}
 #carrier-picker{max-height:24rem;overflow-y:auto}
@@ -539,7 +539,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .carrier-row .carrier-edit:focus-visible{outline:2px solid currentColor}
 .directory-buttons button:hover{background:#e0e3e6}
 .selected-carrier{background:#f6f6f6;padding:8px;line-height:1.6;overflow-wrap:anywhere}
-.shipment-photo{margin-top:8px;min-height:70px}#unload-directory form{display:grid;gap:5px;margin-top:6px}
+.shipment-photo{margin-top:8px;min-height:70px}#unload-editor form{display:grid;gap:5px;margin-top:6px}
 @media(max-width:600px){.shipment-fields{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .employee-access{margin-top:8px}.employee-access .actions{gap:5px}
 #factory-entry-handle{cursor:move;touch-action:none;user-select:none}#factory-entry-handle button{cursor:pointer}
@@ -593,7 +593,6 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <?php else: ?>
 <div class="transport-layout">
 <div class="transport-sidebar">
-<a class="button" href="<?=e($transportQuery.'view=cutting')?>">Cięcie</a>
 <aside class="factory-menu" aria-label="Fabryki">
 <div class="factory-heading"><h2>Fabryki</h2><?php if ($owner): ?><button type="button" id="add-factory" aria-label="Dodaj fabrykę" title="Dodaj fabrykę">+</button><?php endif ?></div>
 <div id="factory-shortcuts"><div id="factory-featured"></div><details id="factory-more" class="catalog-more" hidden><summary>Więcej fabryk</summary><div id="factory-other"></div></details></div>
@@ -689,15 +688,21 @@ foreach ($featuredCarriers as $item) $renderCarrier($item);
 </dialog>
 <?php endif ?>
 </section>
-<section id="unload-directory">
-<h2>Budowy</h2>
-<label>Szukaj budowy<input type="search" id="unload-search" placeholder="Firma, miejscowość lub kierownik"></label>
+<?php foreach (['1','2'] as $directoryGroup): ?>
+<section class="unload-directory" id="<?=$directoryGroup === '1' ? 'unload-directory' : 'unload-directory-2'?>">
+<h2><?=$directoryGroup === '1' ? 'Budowy' : 'Budowy 2'?></h2>
+<label>Szukaj budowy<input type="search" data-site-search placeholder="Firma, miejscowość lub kierownik"></label>
 <div class="directory-buttons">
+<?php if ($directoryGroup === '1'): ?>
 <div class="carrier-row" data-unload-search="JURKO Warszawa">
 <button type="button" data-unload="JURKO, Al. Jerozolimskie 229, 02-495 Warszawa">JURKO · Al. Jerozolimskie 229</button>
 </div>
+<?php endif ?>
 <?php foreach ($unloads as $item):
     $profile = json_decode($item['unload_profile'] ?? '', true) ?: [];
+    $group = $profile['directory_group'] ?? (stripos($item['name'], 'malbud') !== false ? '2' : '1');
+    if ($group !== $directoryGroup) continue;
+    $profile['directory_group'] = $group;
     $instructions = [];
     foreach ($unloadFields as $key => [$label]) {
         if ($key !== 'site_email' && ($profile[$key] ?? '') !== '') $instructions[] = $label.': '.$profile[$key];
@@ -712,14 +717,19 @@ foreach ($featuredCarriers as $item) $renderCarrier($item);
 </div>
 <?php endforeach ?>
 </div>
-<p id="unload-empty" hidden role="status">Brak pasujących punktów.</p>
+<p data-site-empty hidden role="status">Brak pasujących punktów.</p>
 <?php if ($owner): ?>
-<button type="button" id="add-unload">Dodaj budowę</button>
+<button type="button" data-add-unload="<?=$directoryGroup?>">Dodaj budowę</button>
+<?php endif ?>
+</section>
+<?php endforeach ?>
+<?php if ($owner): ?>
 <dialog id="unload-editor" aria-labelledby="unload-editor-title">
 <h3 id="unload-editor-title">Punkt rozładunku</h3>
 <form method="post">
 <input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="directory"><input type="hidden" name="kind" value="unload">
 <input type="hidden" name="directory_id">
+<label>Kartoteka<select name="directory_group"><option value="1">Budowy</option><option value="2">Budowy 2</option></select></label>
 <label>Firma / nazwa budowy<input name="name" maxlength="150" required></label>
 <label>Pełny adres rozładunku<input name="address" maxlength="300" required></label>
 <?php foreach ($unloadFields as $key => [$label, $length]): ?>
@@ -729,11 +739,6 @@ foreach ($featuredCarriers as $item) $renderCarrier($item);
 </form>
 </dialog>
 <?php endif ?>
-</section>
-
-
-
-
 </div>
 <div class="transport-content">
 <div class="transport-heading"><h1>Transport zewnętrzny</h1><a class="button" href="#transport-history" id="open-history">Wcześniejsze zlecenia</a></div>
@@ -839,7 +844,7 @@ foreach ($featuredCarriers as $item) $renderCarrier($item);
 <a id="factory-mail" hidden>Otwórz e-mail do fabryki</a>
 </section>
 
-<section><h2>Budowy</h2><a href="#unload-directory">Wybierz budowę</a><br><details id="building-email"><summary>E-mail do budowy</summary>
+<section><h2>Budowy</h2><a href="#unload-directory">Wybierz budowę</a> · <a href="#unload-directory-2">Budowy 2</a><br><details id="building-email"><summary>E-mail do budowy</summary>
 <label>Treść e-maila<textarea id="building-preview" rows="8" readonly></textarea></label>
 <label>Adresy e-mail (oddziel przecinkami)<input id="building-recipient" type="email" multiple maxlength="254"></label>
 <div id="building-recipients" role="group" aria-label="Odbiorcy wiadomości"></div>
@@ -1266,19 +1271,24 @@ for (const button of document.querySelectorAll('[data-carrier]')) {
     });
 }
 const deliveryAddress = document.getElementById('delivery-address');
-const unloadSearch = document.getElementById('unload-search');
-const unloadRows = [...document.querySelectorAll('[data-unload-search]')];
-unloadSearch.addEventListener('input', () => {
-    const query = normalize(unloadSearch.value.trim());
-    for (const row of unloadRows) row.hidden = !normalize(row.dataset.unloadSearch).includes(query);
-    document.getElementById('unload-empty').hidden = unloadRows.some(row => !row.hidden);
-});
+for (const section of document.querySelectorAll('.unload-directory')) {
+    const search = section.querySelector('[data-site-search]');
+    const rows = [...section.querySelectorAll('[data-unload-search]')];
+    const filterSites = () => {
+        const query = normalize(search.value.trim());
+        for (const row of rows) row.hidden = !normalize(row.dataset.unloadSearch).includes(query);
+        section.querySelector('[data-site-empty]').hidden = rows.some(row => !row.hidden);
+    };
+    search.addEventListener('input', filterSites);
+    filterSites();
+}
 const unloadEditor = document.getElementById('unload-editor');
 if (unloadEditor) {
     const form = unloadEditor.querySelector('form');
-    document.getElementById('add-unload').addEventListener('click', () => {
+    for (const button of document.querySelectorAll('[data-add-unload]')) button.addEventListener('click', () => {
         form.reset();
         form.elements.namedItem('directory_id').value = '';
+        form.elements.namedItem('directory_group').value = button.dataset.addUnload;
         unloadEditor.showModal();
     });
     document.getElementById('cancel-unload').addEventListener('click', () => unloadEditor.close());
