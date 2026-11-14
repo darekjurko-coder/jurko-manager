@@ -505,7 +505,12 @@ main{max-width:1600px}
 #factory-photo-status:empty{display:none}
 p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.transport-history .table{margin-top:7px}
 @media(max-width:600px){input,select,textarea{font-size:16px}button,.button{min-height:32px}}
-.carrier-directory{margin-top:8px}.carrier-directory form,.shipment-step details{display:grid;gap:5px}
+.carrier-directory{margin-top:8px}
+.carrier-directory .factory-heading button{background:#f1f2f3;color:#293238}
+.carrier-directory .factory-heading button:hover{background:#e0e3e6}
+.transport-sidebar .catalog-more{margin:4px 0 8px}
+.transport-sidebar .catalog-more summary{cursor:pointer;color:#52615a;font-weight:400}
+#factory-shortcuts[hidden],.catalog-more[hidden]{display:none}.carrier-directory form,.shipment-step details{display:grid;gap:5px}
 .carrier-directory input{width:100%}.carrier-names{margin:6px 0 0;padding-left:18px}
 [id$="-photo-status"]:empty,#pickup-message:empty{display:none}
 .shipment-header{display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:7px}
@@ -523,10 +528,10 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 .carrier-row[hidden]{display:none}
 #unload-editor{width:min(520px,90vw);max-height:85vh;overflow:auto}
 #unload-directory input,#unload-directory textarea{width:100%}
-#carrier-picker [data-carrier],#carrier-picker .carrier-edit{font-weight:400}
+#carrier-picker .carrier-edit{font-weight:400}
 #carrier-picker .carrier-row[hidden]{display:none}
 #carrier-picker{max-height:24rem;overflow-y:auto}
-#carrier-picker + p + label{display:block;margin-top:8px}
+.carrier-directory label:has(#carrier-search){display:block;margin-top:8px}
 .carrier-row .carrier-edit{background:transparent;color:#5f6870;font-size:.75rem;padding:3px 7px}
 .carrier-row .carrier-edit:focus-visible{outline:2px solid currentColor}
 .directory-buttons button:hover{background:#e0e3e6}
@@ -588,7 +593,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <a class="button" href="<?=e($transportQuery.'view=cutting')?>">Cięcie</a>
 <aside class="factory-menu" aria-label="Fabryki">
 <div class="factory-heading"><h2>Fabryki</h2><?php if ($owner): ?><button type="button" id="add-factory" aria-label="Dodaj fabrykę" title="Dodaj fabrykę">+</button><?php endif ?></div>
-<div id="factory-shortcuts"></div>
+<div id="factory-shortcuts"><div id="factory-featured"></div><details id="factory-more" class="catalog-more" hidden><summary>Więcej fabryk</summary><div id="factory-other"></div></details></div>
 <label>Szukaj fabryki<input id="factory-search" type="search" placeholder="Nazwa lub adres"></label>
 <div id="factory-results"></div>
 <div id="factory-top-carriers"></div>
@@ -616,7 +621,7 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <?php endif ?>
 </aside>
 <section class="carrier-directory">
-<div class="factory-heading"><h2>Przewoźnik</h2><?php if ($owner): ?><button type="button" id="add-carrier" aria-label="Dodaj firmę transportową" title="Dodaj firmę transportową">+</button><?php endif ?></div>
+<div class="factory-heading"><h2>Przewoźnicy</h2><?php if ($owner): ?><button type="button" id="add-carrier" aria-label="Dodaj firmę transportową" title="Dodaj firmę transportową">+</button><?php endif ?></div>
 <?php
 $renderCarrier = static function (array $item) use ($owner): void {
 ?>
@@ -630,7 +635,22 @@ $renderCarrier = static function (array $item) use ($owner): void {
 };
 ?>
 <div id="carrier-picker" class="directory-buttons">
-<?php foreach ($carriers as $item) $renderCarrier($item); ?>
+<?php
+$featuredCarriers = [];
+foreach (['CLEVER', 'Ekotrans', 'Północ Południe'] as $name) {
+    foreach ($carriers as $item) {
+        if (stripos($item['name'], $name) !== 0) continue;
+        $featuredCarriers[$item['id']] = $item;
+        break;
+    }
+}
+$otherCarriers = array_filter($carriers, static fn(array $item): bool => !isset($featuredCarriers[$item['id']]));
+foreach ($featuredCarriers as $item) $renderCarrier($item);
+?>
+<details id="carrier-more" class="catalog-more" <?=$otherCarriers ? '' : 'hidden'?>>
+<summary>Więcej przewoźników</summary>
+<div class="directory-buttons"><?php foreach ($otherCarriers as $item) $renderCarrier($item); ?></div>
+</details>
 </div>
 <p id="carrier-no-results" role="status" <?=$carriers ? 'hidden' : ''?>>Brak pasujących przewoźników.</p>
 <label>Szukaj przewoźnika<input id="carrier-search" type="search" placeholder="Nazwa lub NIP"></label>
@@ -1117,16 +1137,19 @@ const shortcutBrands = new Set(groups.flatMap(([, brands]) => brands.map(normali
 for (const [, brands] of groups) {
     const group = document.createElement('div');
     group.className = 'factory-group';
-    shortcuts.append(group);
+    document.getElementById('factory-featured').append(group);
     for (const brand of brands) addFactory(group, directory.get(normalize(brand)));
 }
+const otherFactories = document.getElementById('factory-other');
 for (const [key, brand] of directory) {
-    if (brand.points.length && !shortcutBrands.has(key)) addFactory(shortcuts, brand);
+    if (!shortcutBrands.has(key)) addFactory(otherFactories, brand);
 }
+document.getElementById('factory-more').hidden = !otherFactories.childElementCount;
 search.addEventListener('input', () => {
     results.replaceChildren();
     feedback.textContent = '';
     const query = normalize(search.value);
+    shortcuts.hidden = Boolean(query);
     if (!query) return;
     let found = false;
     for (const [key, brand] of directory) {
@@ -1172,11 +1195,18 @@ function pickupRows() {
 const carrierContacts = <?=json_encode(array_column(array_map(static fn(array $item): array => array_intersect_key($item,array_flip(['id','name','address','email','phone','nip'])), $carriers), null, 'id'), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 const carrierSearch = document.getElementById('carrier-search');
 const carrierRows = [...document.querySelectorAll('#carrier-picker .carrier-row')];
+const carrierMore = document.getElementById('carrier-more');
+let carrierMoreWasOpen = false;
+let carrierSearchActive = false;
 carrierSearch.addEventListener('input', () => {
     const search = carrierSearch.value.trim().toLocaleLowerCase('pl');
     for (const row of carrierRows) {
         row.hidden = !row.dataset.carrierSearch.toLocaleLowerCase('pl').includes(search);
     }
+    if (search && !carrierSearchActive) carrierMoreWasOpen = carrierMore.open;
+    if (search || carrierSearchActive) carrierMore.open = Boolean(search) || carrierMoreWasOpen;
+    carrierSearchActive = Boolean(search);
+    carrierMore.hidden = !carrierRows.some(row => carrierMore.contains(row) && !row.hidden);
     document.getElementById('carrier-no-results').hidden = carrierRows.some(row => !row.hidden);
 });
 const carrierAddDialog = document.getElementById('carrier-add-dialog');
