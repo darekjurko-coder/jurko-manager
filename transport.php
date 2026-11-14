@@ -112,6 +112,13 @@ try {
             if (($exception->errorInfo[1] ?? null) !== 1060) throw $exception;
         }
     }
+    if (!$db->query("SHOW COLUMNS FROM jm_transport_directory LIKE 'phone_2'")->fetch()) {
+        try {
+            $db->exec("ALTER TABLE jm_transport_directory ADD COLUMN phone_2 VARCHAR(16) NOT NULL DEFAULT ''");
+        } catch (PDOException $exception) {
+            if (($exception->errorInfo[1] ?? null) !== 1060) throw $exception;
+        }
+    }
     $unloadFields = [
         'site_email' => ['E-maile budowy (oddziel przecinkami)', 254],
         'town' => ['Miejscowość', 120],
@@ -180,7 +187,7 @@ try {
                     $email = field('email', 254);
                     $phone = preg_replace('/[ +()-]/', '', field('phone', 30));
                     if (($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) ||
-                        ($phone !== '' && !preg_match('/^[1-9][0-9]{7,14}$/D', $phone)) ||
+                        ($kind === 'carrier' && $phone !== '' && !preg_match('/^[1-9][0-9]{7,14}$/D', $phone)) ||
                         ($email === '' && $phone === '')) {
                         throw new InvalidArgumentException('Podaj poprawny e-mail lub numer WhatsApp z kodem kraju.');
                     }
@@ -203,10 +210,21 @@ try {
                     $country = $kind === 'factory' ? choice('country', array_keys(FACTORIES)) : '';
                     $address = $kind !== 'carrier' ? field('address', 300, true) : '';
                     $email = field('email', 254);
-                    $phone = $kind === 'carrier' ? preg_replace('/[ +()-]/', '', field('phone', 30)) : '';
-                    $addresses = $kind === 'factory' ? array_map('trim', explode(',', $email)) : [$email];
+                    $phone = $kind !== 'unload' ? preg_replace('/[ +().-]/', '', field('phone', 30)) : '';
+                    $phone2 = $kind === 'factory' ? preg_replace('/[ +().-]/', '', field('phone_2', 30)) : '';
+                    if ($kind === 'factory') {
+                        $email2 = field('email_2', 254);
+                        $email = $email2 !== '' ? $email.','.$email2 : $email;
+                        if (strlen($email) > 254) throw new InvalidArgumentException('Adresy e-mail mogą łącznie mieć maksymalnie 254 znaki.');
+                        foreach ([$phone,$phone2] as $contactPhone) {
+                            if ($contactPhone !== '' && !preg_match('/^[0-9]{7,15}$/D', $contactPhone)) {
+                                throw new InvalidArgumentException('Podaj poprawny telefon kontaktu w fabryce.');
+                            }
+                        }
+                    }
+                    $addresses = $kind === 'factory' ? array_filter(array_map('trim', explode(',', $email)), static fn(string $value): bool => $value !== '') : [$email];
                     if (($email !== '' && count(array_filter($addresses, static fn(string $address): bool => filter_var($address, FILTER_VALIDATE_EMAIL) !== false)) !== count($addresses)) ||
-                        ($phone !== '' && !preg_match('/^[1-9][0-9]{7,14}$/D', $phone)) ||
+                        ($kind === 'carrier' && $phone !== '' && !preg_match('/^[1-9][0-9]{7,14}$/D', $phone)) ||
                         ($kind === 'carrier' && $email === '' && $phone === '')) {
                         throw new InvalidArgumentException('Podaj poprawny e-mail lub numer WhatsApp z kodem kraju.');
                     }
@@ -239,8 +257,8 @@ try {
                     $pointId = $kind === 'factory' ? numberField('directory_id', 12, false, true) : null;
                     if ($pointId !== null) {
                         try {
-                            $query = $db->prepare("UPDATE jm_transport_directory SET name=?,country=?,address=?,email=? WHERE id=? AND kind='factory'");
-                            $query->execute([$name,$country,$address,$email,$pointId]);
+                            $query = $db->prepare("UPDATE jm_transport_directory SET name=?,country=?,address=?,email=?,phone=?,phone_2=? WHERE id=? AND kind='factory'");
+                            $query->execute([$name,$country,$address,$email,$phone,$phone2,$pointId]);
                         } catch (PDOException $exception) {
                             if (($exception->errorInfo[1] ?? null) === 1062) {
                                 throw new InvalidArgumentException('Taki punkt odbioru już istnieje w kartotece.');
@@ -249,8 +267,8 @@ try {
                         }
                         break;
                     }
-                    $query = $db->prepare('INSERT INTO jm_transport_directory (kind,name,country,address,email,phone) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE email=?,phone=?');
-                    $query->execute([$kind,$name,$country,$address,$email,$phone,$email,$phone]);
+                    $query = $db->prepare('INSERT INTO jm_transport_directory (kind,name,country,address,email,phone,phone_2) VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE email=?,phone=?,phone_2=?');
+                    $query->execute([$kind,$name,$country,$address,$email,$phone,$phone2,$email,$phone,$phone2]);
                     break;
                 case 'create':
                     $editId = numberField('edit_id', 12, false, true);
@@ -366,7 +384,6 @@ try {
     }
     $saved = !empty($_SESSION['transport_saved']);
     unset($_SESSION['transport_saved']);
-    $employees = $owner ? $db->query("SELECT email,active FROM jm_accounts WHERE role='employee' ORDER BY email")->fetchAll() : [];
     $directory = $db->query('SELECT * FROM jm_transport_directory ORDER BY country,name,address')->fetchAll();
     $factories = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'factory' && $row['name'] !== '' && $row['address'] !== '');
     $unloads = array_filter($directory, static fn(array $row): bool => $row['kind'] === 'unload');
@@ -578,7 +595,10 @@ p{margin:6px 0}.transport-messages textarea{min-height:185px;resize:vertical}.tr
 <label>Kraj<select name="country" required id="factory-country"><?php foreach (FACTORIES as $country => $names): ?><option><?=e($country)?></option><?php endforeach ?></select></label>
 <label>Fabryka<input id="directory-factory" name="name" list="factory-names" maxlength="150" required></label><datalist id="factory-names"></datalist>
 <label>Adres odbioru<input id="directory-address" name="address" maxlength="300" required></label>
-<label>E-maile do fabryki<input id="directory-emails" name="email" type="email" multiple maxlength="254" placeholder="Adresy oddziel przecinkami"></label>
+<label>E-mail kontaktu 1<input id="directory-emails" name="email" type="email" maxlength="254"></label>
+<label>Telefon kontaktu 1<input id="directory-phone" name="phone" type="tel" maxlength="30"></label>
+<label>E-mail kontaktu 2<input id="directory-email-2" name="email_2" type="email" multiple maxlength="254"></label>
+<label>Telefon kontaktu 2<input id="directory-phone-2" name="phone_2" type="tel" maxlength="30"></label>
 <label>Zdjęcie z danymi<input id="factory-photo" type="file" accept="image/png,image/jpeg,image/webp"></label>
 <label>Tekst ze zdjęcia lub schowka<textarea id="factory-photo-text" rows="3" maxlength="12000"></textarea></label>
 <button type="button" id="fill-factory-fields">Uzupełnij pola z tekstu</button>
@@ -687,18 +707,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 
 
 
-<?php if ($owner): ?>
-<details class="factory-menu employee-access">
-<summary>Dostęp pracowników</summary>
-<p>Dodaj adres Gmail lub Google Workspace pracownika. Po zalogowaniu pracownik zobaczy swoje zlecenia.</p>
-<form method="post" class="actions">
-<input type="hidden" name="csrf" value="<?=$csrf?>"><input type="hidden" name="action" value="access">
-<label>E-mail konta Google<input name="email" type="email" maxlength="254" required></label>
-<button name="access" value="enable">Włącz dostęp</button><button name="access" value="disable">Wyłącz dostęp</button>
-</form>
-<?php if ($employees): ?><ul><?php foreach ($employees as $employee): ?><li><?=e($employee['email'])?> · <?=$employee['active']?'Aktywny':'Wyłączony'?></li><?php endforeach ?></ul><?php endif ?>
-</details>
-<?php endif ?>
+
 </div>
 <div class="transport-content">
 <div class="transport-heading"><h1>Transport zewnętrzny</h1><a class="button" href="#transport-history" id="open-history">Wcześniejsze zlecenia</a></div>
@@ -764,7 +773,7 @@ $renderCarrier = static function (array $item) use ($owner): void {
 <p id="pickup-message" class="muted" role="status"></p>
 </details></div>
 <section id="delivery-restrictions">
-<details open><summary>Obostrzenia dostawy</summary>
+<details><summary>Obostrzenia dostawy</summary>
 <table><thead><tr><th scope="col">Warunek do uwzględnienia</th><th scope="col">Wymagany<br><button type="button" data-set-delivery="all">Zaznacz wszystkie</button> <button type="button" data-set-delivery="none">Odznacz wszystkie</button></th></tr></thead><tbody>
 <?php foreach (['Kod rozładunku / awizacji','Auto z HDS','Auto z windą','Utwardzony plac do rozładunku','Auto bez plandeki','Ograniczenie tonażowe / zezwolenie','Dostawa o ustalonej godzinie lub w nocy','Oznakowanie świetlne lub dźwiękowe','Rozładunek zapewnia budowa'] as $restriction): ?>
 <tr><td><?=e($restriction)?></td><td><input type="checkbox" data-delivery-condition="<?=e($restriction)?>" aria-label="<?=e($restriction)?>"></td></tr>
@@ -878,7 +887,7 @@ const search = document.getElementById('factory-search');
 const results = document.getElementById('factory-results');
 const feedback = document.getElementById('factory-feedback');
 const orderAddress = document.getElementById('order-address');
-const points = <?=json_encode(array_values(array_map(static fn(array $row): array => array_intersect_key($row, array_flip(['id','name','country','address','email'])), $factories)), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
+const points = <?=json_encode(array_values(array_map(static fn(array $row): array => array_intersect_key($row, array_flip(['id','name','country','address','email','phone','phone_2'])), $factories)), JSON_HEX_TAG | JSON_THROW_ON_ERROR)?>;
 const normalize = value => value.toLocaleLowerCase('pl').replace(/ł/g,'l').normalize('NFD').replace(/\p{M}/gu,'').replace(/[^a-z0-9]+/g,'');
 const groups = [['Polska',['Tubądzin','Paradyż','Cerrad']],['Włochy',['Novabell','Italgraniti']]];
 const directory = new Map();
@@ -970,10 +979,17 @@ function openFactoryEntry(point = null) {
     country.dispatchEvent(new Event('change'));
     document.getElementById('directory-factory').value = point?.name ?? '';
     document.getElementById('directory-address').value = point?.address ?? '';
-    document.getElementById('directory-emails').value = point?.email ?? '';
+    fillFactoryEmails(point?.email ?? '');
+    document.getElementById('directory-phone').value = point?.phone ?? '';
+    document.getElementById('directory-phone-2').value = point?.phone_2 ?? '';
     document.getElementById('factory-entry-title').textContent = point ? 'Modyfikuj punkt odbioru' : 'Dodaj fabrykę';
     entry.showModal();
     document.getElementById('directory-factory').focus();
+}
+function fillFactoryEmails(value) {
+    const [first, ...others] = value.split(',').map(address => address.trim());
+    document.getElementById('directory-emails').value = first;
+    document.getElementById('directory-email-2').value = others.join(',');
 }
 if (country) {
     const entry = document.getElementById('factory-entry');
@@ -1477,7 +1493,7 @@ function bindTransportPhoto(prefix, rawText, photoStatus, fill) {
             nameField.value = brand.name;
         }
         if (address && address.length <= 300) document.getElementById('directory-address').value = address;
-        if (emails && emails.length <= 254) document.getElementById('directory-emails').value = emails;
+        if (emails && emails.length <= 254) fillFactoryEmails(emails);
         photoStatus.textContent = 'Sprawdź uzupełnione pola i dopisz brakujące dane przed zapisaniem.';
     }
 
